@@ -1,0 +1,19 @@
+{
+  "name": "blockchain-voting-verifier",
+  "version": "1.0.0",
+  "description": "Independent Election Results and Zero-Knowledge Proof Verifier CLI",
+  "main": "src/index.js",
+  "bin": {
+    "verify-election": "src/index.js"
+  },
+  "scripts": {
+    "test": "jest",
+    "verify": "node src/index.js"
+  },
+  "dependencies": {
+    "ethers": "^6.13.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

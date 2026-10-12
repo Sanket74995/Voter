@@ -1,0 +1,26 @@
+{
+  "name": "blockchain-voting-system",
+  "version": "1.0.0",
+  "description": "Full-Stack Blockchain-Based Voting System with Privacy-Preserving Cryptographic Credentials, Solidity Smart Contracts, and React Native CLI",
+  "private": true,
+  "scripts": {
+    "test:mobile": "npm --prefix mobile test",
+    "test:backend": "npm --prefix backend test",
+    "test:contracts": "npm --prefix contracts test",
+    "test:verifier": "npm --prefix verifier test",
+    "start:backend": "npm --prefix backend start",
+    "start:contracts": "npm --prefix contracts run node",
+    "start:mobile": "npm --prefix mobile start"
+  },
+  "keywords": [
+    "blockchain",
+    "voting",
+    "solidity",
+    "hardhat",
+    "zero-knowledge",
+    "react-native",
+    "privacy-preserving"
+  ],
+  "author": "Engineering Final Year Project",
+  "license": "ISC"
+}
