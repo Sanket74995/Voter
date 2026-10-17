@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  BackHandler,
+  ToastAndroid,
+  Platform,
+} from 'react-native';
 import { colors } from '../theme/colors';
 
 // Screen imports
@@ -25,6 +33,8 @@ export const AppNavigator = () => {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [electionParties, setElectionParties] = useState([]);
   const [screenStack, setScreenStack] = useState([]);
+
+  const lastBackPressRef = useRef(0);
 
   const navigateTo = (screen) => {
     setScreenStack((prev) => [...prev, currentScreen]);
@@ -66,6 +76,61 @@ export const AppNavigator = () => {
     setCurrentScreen('LOGIN');
     setScreenStack([]);
   };
+
+  // Global Android Hardware / Gesture Back Handler
+  useEffect(() => {
+    const onHardwareBack = () => {
+      // 1. If there is a screen in history, go back to previous screen
+      if (screenStack.length > 0) {
+        const prevScreen = screenStack[screenStack.length - 1];
+        setScreenStack((prev) => prev.slice(0, prev.length - 1));
+        setCurrentScreen(prevScreen);
+        return true; // Prevents app from closing!
+      }
+
+      // 2. If on a sub-screen without stack, go to dashboard
+      const isRootScreen =
+        currentScreen === 'SPLASH' ||
+        currentScreen === 'ONBOARDING' ||
+        currentScreen === 'LOGIN' ||
+        currentScreen === 'VOTER_DASHBOARD' ||
+        currentScreen === 'ADMIN_DASHBOARD' ||
+        currentScreen === 'PARTY_DASHBOARD';
+
+      if (!isRootScreen) {
+        routeHome(user);
+        return true;
+      }
+
+      // 3. If on a main dashboard, require two presses to exit app
+      if (
+        currentScreen === 'VOTER_DASHBOARD' ||
+        currentScreen === 'ADMIN_DASHBOARD' ||
+        currentScreen === 'PARTY_DASHBOARD'
+      ) {
+        const now = Date.now();
+        if (now - lastBackPressRef.current < 2000) {
+          BackHandler.exitApp();
+          return true;
+        }
+        lastBackPressRef.current = now;
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT);
+        }
+        return true;
+      }
+
+      // Allow default exit on Login / Onboarding
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      onHardwareBack
+    );
+
+    return () => subscription.remove();
+  }, [screenStack, currentScreen, user]);
 
   return (
     <SafeAreaView style={styles.container}>

@@ -11,6 +11,10 @@ export const LoginScreen = ({ onLoginSuccess }) => {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   
+  // Server Gateway configuration
+  const [serverUrl, setServerUrl] = useState(api.baseUrl);
+  const [showServerConfig, setShowServerConfig] = useState(false);
+
   // Registration fields
   const [voterId, setVoterId] = useState('');
   const [fullName, setFullName] = useState('');
@@ -182,6 +186,40 @@ export const LoginScreen = ({ onLoginSuccess }) => {
         </TouchableOpacity>
       </Card>
 
+      {/* Server Gateway Configuration */}
+      <View style={styles.serverBox}>
+        <TouchableOpacity
+          onPress={() => setShowServerConfig(!showServerConfig)}
+          style={styles.serverHeaderRow}
+        >
+          <Text style={styles.serverInfoText} numberOfLines={1}>
+            🌐 Gateway: {api.baseUrl}
+          </Text>
+          <Text style={styles.serverEditText}>{showServerConfig ? 'Close' : 'Change'}</Text>
+        </TouchableOpacity>
+
+        {showServerConfig && (
+          <View style={styles.serverEditForm}>
+            <Input
+              label="Backend Server URL"
+              placeholder="http://192.168.1.101:5000/api"
+              value={serverUrl}
+              onChangeText={setServerUrl}
+            />
+            <Button
+              title="Save & Connect"
+              variant="outline"
+              onPress={() => {
+                api.setBaseUrl(serverUrl.trim());
+                setShowServerConfig(false);
+                Alert.alert('Server Updated', `API endpoint set to: ${api.baseUrl}`);
+              }}
+              style={{ marginTop: spacing.xs }}
+            />
+          </View>
+        )}
+      </View>
+
       {/* Demo Credentials Quick-Filler for Evaluation */}
       {!isRegisterMode && (
         <View style={styles.demoBox}>
@@ -318,5 +356,32 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     fontWeight: '600',
     color: colors.primary,
+  },
+  serverBox: {
+    marginTop: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+  },
+  serverHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  serverInfoText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+    marginRight: spacing.xs,
+  },
+  serverEditText: {
+    ...typography.caption,
+    color: colors.accent,
+    fontWeight: '700',
+  },
+  serverEditForm: {
+    marginTop: spacing.sm,
   },
 });

@@ -99,24 +99,51 @@ const submitBallot = async (req, res, next) => {
         encryptedBallot: encryptedBallot.startsWith('0x') ? encryptedBallot : '0x' + Buffer.from(encryptedBallot).toString('hex'),
         leafCommitment: formattedLeaf,
         merkleProof: formattedProof,
+        electionDetails: {
+          title: election.title,
+          startTime: Math.floor(new Date(election.startTime).getTime() / 1000),
+          endTime: Math.floor(new Date(election.endTime).getTime() / 1000),
+          encryptionPublicKey: election.encryptionPublicKey,
+          credentialRoot: election.credentialRoot,
+        },
       });
     } catch (blockchainError) {
-      const errMsg = blockchainError.message || '';
-      if (errMsg.includes('NullifierAlreadyUsed')) {
+      const errStr =
+        (blockchainError.message || '') +
+        ' ' +
+        (blockchainError.data || '') +
+        ' ' +
+        (blockchainError.info?.error?.message || '');
+
+      if (errStr.includes('NullifierAlreadyUsed') || errStr.includes('0xda1f09e8')) {
         return res.status(409).json({
           success: false,
           error: 'This voting entitlement / nullifier has already been consumed for this election.',
         });
       }
-      if (errMsg.includes('ProofVerificationFailed') || errMsg.includes('MerkleRootMismatch')) {
+      if (
+        errStr.includes('ProofVerificationFailed') ||
+        errStr.includes('MerkleRootMismatch') ||
+        errStr.includes('0x8aa536b5')
+      ) {
         return res.status(400).json({
           success: false,
           error: 'Cryptographic proof verification failed. Leaf commitment is not part of eligible tree.',
         });
       }
+      if (errStr.includes('ElectionNotOpen') || errStr.includes('0xea71f501')) {
+        return res.status(400).json({
+          success: false,
+          error: 'Smart contract reported election is not currently open for voting.',
+        });
+      }
       throw blockchainError;
     }
 
+    // Persist the onChainElectionId if not already saved
+    if (!election.onChainElectionId) {
+      election.onChainElectionId = onChainId;
+    }
     // Increment aggregate turnout on MongoDB without linking identity
     election.turnoutCount += 1;
     await election.save();

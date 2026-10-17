@@ -6,7 +6,7 @@ import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { api } from '../../services/api';
-import { createVoterSecrets, computeCommitment } from '../../crypto/voterCrypto';
+import { createVoterSecrets, computeCommitment, saveVoterCredential } from '../../crypto/voterCrypto';
 
 export const ElectionDetailsScreen = ({
   election,
@@ -54,6 +54,7 @@ export const ElectionDetailsScreen = ({
 
       const res = await api.issueCredential(election.electionId, commitment);
       if (res.success) {
+        saveVoterCredential(election.electionId, { secretKey, salt, commitment });
         Alert.alert(
           'Credential Issued',
           'Your cryptographic commitment has been registered into the election Merkle tree. Your secret key is stored locally on this device.',

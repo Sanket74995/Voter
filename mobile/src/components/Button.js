@@ -1,13 +1,14 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { colors, typography, spacing } from '../theme/colors';
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View } from 'react-native';
+import { colors, typography, spacing, radius, shadows } from '../theme/colors';
 
 export const Button = ({
   title,
   onPress,
-  variant = 'primary', // 'primary', 'secondary', 'danger', 'outline'
+  variant = 'primary', // 'primary', 'secondary', 'danger', 'outline', 'success'
   disabled = false,
   loading = false,
+  icon,
   style,
   textStyle,
 }) => {
@@ -20,6 +21,8 @@ export const Button = ({
         return styles.dangerContainer;
       case 'outline':
         return styles.outlineContainer;
+      case 'success':
+        return styles.successContainer;
       case 'primary':
       default:
         return styles.primaryContainer;
@@ -35,6 +38,8 @@ export const Button = ({
         return styles.dangerText;
       case 'outline':
         return styles.outlineText;
+      case 'success':
+        return styles.successText;
       case 'primary':
       default:
         return styles.primaryText;
@@ -49,9 +54,15 @@ export const Button = ({
       style={[styles.baseContainer, getContainerStyle(), style]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === 'outline' ? colors.primary : colors.textInverse} size="small" />
+        <ActivityIndicator
+          color={variant === 'outline' ? colors.primary : colors.textInverse}
+          size="small"
+        />
       ) : (
-        <Text style={[styles.baseText, getTextStyle(), textStyle]}>{title}</Text>
+        <View style={styles.contentRow}>
+          {icon && <View style={styles.iconWrapper}>{icon}</View>}
+          <Text style={[styles.baseText, getTextStyle(), textStyle]}>{title}</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -59,35 +70,56 @@ export const Button = ({
 
 const styles = StyleSheet.create({
   baseContainer: {
-    height: 48,
-    borderRadius: 8,
+    height: 50,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  contentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs + 2,
+  },
+  iconWrapper: {
+    marginRight: 4,
   },
   baseText: {
     ...typography.titleSmall,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
   primaryContainer: {
-    backgroundColor: colors.accent,
+    backgroundColor: '#2563EB',
+    ...shadows.accent,
   },
   primaryText: {
     color: colors.textInverse,
   },
   secondaryContainer: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primary,
+    ...shadows.sm,
   },
   secondaryText: {
     color: colors.textInverse,
   },
+  successContainer: {
+    backgroundColor: '#10B981',
+    ...shadows.sm,
+  },
+  successText: {
+    color: colors.textInverse,
+  },
   dangerContainer: {
-    backgroundColor: colors.danger,
+    backgroundColor: '#EF4444',
+    ...shadows.sm,
   },
   dangerText: {
     color: colors.textInverse,
   },
   outlineContainer: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.borderDark,
   },
@@ -95,11 +127,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   disabledContainer: {
-    backgroundColor: colors.surfaceSubtle,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   disabledText: {
-    color: colors.textMuted,
+    color: '#94A3B8',
   },
 });

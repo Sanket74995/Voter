@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = 'http://10.0.2.2:5000/api';
+const DEFAULT_API_BASE_URL = 'http://192.168.1.101:5000/api';
 
 class ApiClient {
   constructor() {
@@ -26,11 +26,17 @@ class ApiClient {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
+    const controller = new AbortController();
+    const timeoutMs = options.timeout || 8000;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       const data = await response.json().catch(() => ({}));
 
@@ -40,7 +46,12 @@ class ApiClient {
 
       return data;
     } catch (err) {
-      // Provide clean error message
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error(
+          `Connection timed out (${this.baseUrl}). Ensure your phone and PC are on the same Wi-Fi and port 5000 is open.`
+        );
+      }
       throw new Error(err.message || 'Network request failed. Ensure backend is running.');
     }
   }
@@ -126,6 +137,17 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ electionId, voterId }),
     });
+  }
+
+  async bulkRegisterVoterEligibility(electionId, voterIds) {
+    return this.request('/eligibility/bulk-register', {
+      method: 'POST',
+      body: JSON.stringify({ electionId, voterIds }),
+    });
+  }
+
+  async getRegisteredVoters() {
+    return this.request('/eligibility/registered-voters');
   }
 
   async revokeCredential(electionId, voterId, reason) {

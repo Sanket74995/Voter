@@ -108,6 +108,11 @@ const tallyAndPublish = async (req, res, next) => {
     // Fetch all recorded ballots from on-chain smart contract
     const onChainBallots = await blockchainService.fetchOnChainBallots(onChainId);
 
+    if (onChainBallots.length === 0) {
+      console.warn(`[Tally] No on-chain ballots found for election ${id} (onChainId=${onChainId}). ` +
+        'This can happen if the Hardhat node was restarted and on-chain state was lost.');
+    }
+
     // Initialize vote counts for each candidate
     const candidateVotes = new Array(approvedParties.length).fill(0);
 

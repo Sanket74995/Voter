@@ -219,16 +219,7 @@ const issueCredential = async (req, res, next) => {
 const getCredentialProof = async (req, res, next) => {
   try {
     const { electionId } = req.params;
-    const { commitment } = req.query;
-
-    if (!commitment) {
-      return res.status(400).json({
-        success: false,
-        error: 'Commitment query parameter is required.',
-      });
-    }
-
-    const formattedCommitment = commitment.startsWith('0x') ? commitment : '0x' + commitment;
+    let { commitment } = req.query;
 
     // Fetch all active commitments for this election
     const activeCredentials = await CredentialIssuance.find({
@@ -236,8 +227,31 @@ const getCredentialProof = async (req, res, next) => {
       status: 'ACTIVE',
     });
 
+    // If commitment not specified or not in leaves, check if logged in voter has an active credential
     const leaves = activeCredentials.map((c) => c.commitment);
-    if (!leaves.includes(formattedCommitment)) {
+    let targetCommitment = commitment ? (commitment.startsWith('0x') ? commitment : '0x' + commitment) : null;
+
+    if (!targetCommitment || !leaves.includes(targetCommitment)) {
+      if (req.user?.voterId) {
+        const voterCred = await CredentialIssuance.findOne({
+          electionId,
+          voterId: req.user.voterId,
+          status: 'ACTIVE',
+        });
+        if (voterCred && leaves.includes(voterCred.commitment)) {
+          targetCommitment = voterCred.commitment;
+        }
+      }
+    }
+
+    if (!targetCommitment) {
+      return res.status(400).json({
+        success: false,
+        error: 'No active credential found for this voter/commitment in this election.',
+      });
+    }
+
+    if (!leaves.includes(targetCommitment)) {
       return res.status(404).json({
         success: false,
         error: 'Commitment not found in active credentials for this election.',
@@ -246,13 +260,13 @@ const getCredentialProof = async (req, res, next) => {
 
     const tree = new CredentialMerkleTree(leaves);
     const root = tree.getRoot();
-    const proof = tree.getProof(formattedCommitment);
+    const proof = tree.getProof(targetCommitment);
 
     return res.status(200).json({
       success: true,
       data: {
         electionId,
-        leaf: formattedCommitment,
+        leaf: targetCommitment,
         root,
         proof,
         totalVotersInTree: leaves.length,
@@ -312,8 +326,133 @@ const revokeCredential = async (req, res, next) => {
   }
 };
 
+/**
+ * Bulk register voter eligibility for an election from uploaded list or text (Admin only)
+ */
+const bulkRegisterVoterEligibility = async (req, res, next) => {
+  try {
+    const { electionId, voterIds } = req.body;
+
+    if (!electionId || !Array.isArray(voterIds) || voterIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please choose an election and enter at least one Voter ID.',
+      });
+    }
+
+    const election = await Election.findOne({ electionId });
+    if (!election) {
+      return res.status(404).json({ success: false, error: 'Election not found. Please choose an active election.' });
+    }
+
+    if (election.status !== 'DRAFT') {
+      return res.status(400).json({
+        success: false,
+        error: 'This election is already locked. New voters can only be added while the election is in Draft (setup) mode.',
+      });
+    }
+
+    const results = [];
+    let registeredCount = 0;
+
+    for (const rawId of voterIds) {
+      const cleanVoterId = String(rawId).trim().toUpperCase();
+      if (!cleanVoterId) continue;
+
+      const user = await User.findOne({ voterId: cleanVoterId });
+      if (!user) {
+        results.push({
+          voterId: cleanVoterId,
+          success: false,
+          message: 'Voter ID not found in system',
+        });
+        continue;
+      }
+
+      const existingEligibility = await VoterEligibility.findOne({
+        electionId,
+        voterId: cleanVoterId,
+      });
+
+      if (existingEligibility) {
+        results.push({
+          voterId: cleanVoterId,
+          success: false,
+          message: 'Already added to this election',
+        });
+        continue;
+      }
+
+      await VoterEligibility.create({
+        electionId,
+        voterId: cleanVoterId,
+        eligibilityStatus: 'ELIGIBLE',
+        credentialIssuanceStatus: 'NOT_ISSUED',
+        verifiedBy: req.user.voterId,
+      });
+
+      registeredCount++;
+      results.push({
+        voterId: cleanVoterId,
+        success: true,
+        message: 'Added to election successfully',
+      });
+    }
+
+    // Update totalEligibleVoters count on election
+    const totalCount = await VoterEligibility.countDocuments({
+      electionId,
+      eligibilityStatus: 'ELIGIBLE',
+    });
+    election.totalEligibleVoters = totalCount;
+    await election.save();
+
+    await logAudit({
+      action: 'VOTER_ELIGIBILITY_BULK_REGISTERED',
+      performedBy: req.user.voterId,
+      targetType: 'ELECTION',
+      targetId: election._id,
+      details: { electionId, totalSubmitted: voterIds.length, registeredCount },
+      req,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Bulk registration completed. ${registeredCount} registered successfully, ${voterIds.length - registeredCount} failed.`,
+      data: {
+        totalSubmitted: voterIds.length,
+        registeredCount,
+        failedCount: voterIds.length - registeredCount,
+        results,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all registered voters in the system (Admin only)
+ */
+const getRegisteredVoters = async (req, res, next) => {
+  try {
+    const voters = await User.find({ role: 'voter' })
+      .select('voterId fullName email phoneNumber status')
+      .sort({ voterId: 1 });
+
+    return res.status(200).json({
+      success: true,
+      data: { voters },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   registerVoterEligibility,
+  bulkRegisterVoterEligibility,
+  getRegisteredVoters,
   checkMyEligibility,
   issueCredential,
   getCredentialProof,

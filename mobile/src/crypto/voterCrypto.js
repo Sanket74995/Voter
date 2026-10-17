@@ -36,6 +36,17 @@ export function sha256Hex(asciiStr) {
   return '0x' + hex(h0) + hex(h1) + hex(h2) + hex(h3) + hex(h4) + hex(h5) + hex(h6) + hex(h7);
 }
 
+// In-memory device vault for election credentials
+const voterCredentialVault = {};
+
+export const saveVoterCredential = (electionId, credential) => {
+  voterCredentialVault[electionId] = credential;
+};
+
+export const getVoterCredential = (electionId) => {
+  return voterCredentialVault[electionId] || null;
+};
+
 /**
  * Generate voter secret and salt
  */

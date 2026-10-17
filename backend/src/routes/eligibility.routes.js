@@ -6,6 +6,12 @@ const { authenticate, authorize } = require('../middleware/auth');
 // Admin register voter eligibility
 router.post('/register', authenticate, authorize('admin'), eligibilityController.registerVoterEligibility);
 
+// Admin bulk register voter eligibility (from Excel or batch IDs)
+router.post('/bulk-register', authenticate, authorize('admin'), eligibilityController.bulkRegisterVoterEligibility);
+
+// Admin get list of all registered voters
+router.get('/registered-voters', authenticate, authorize('admin'), eligibilityController.getRegisteredVoters);
+
 // Voter check their eligibility
 router.get('/my/:electionId', authenticate, eligibilityController.checkMyEligibility);
 

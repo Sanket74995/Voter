@@ -10,6 +10,8 @@ import {
   computeCommitment,
   computeNullifier,
   encryptBallotOnDevice,
+  getVoterCredential,
+  saveVoterCredential,
 } from '../../crypto/voterCrypto';
 
 export const VoteSubmissionScreen = ({
@@ -31,34 +33,50 @@ export const VoteSubmissionScreen = ({
       setStep(1);
       await new Promise((r) => setTimeout(r, 600));
 
-      const { secretKey, salt } = createVoterSecrets();
-      const commitment = computeCommitment(secretKey, salt);
-      const nullifier = computeNullifier(secretKey, election.electionId);
-
-      const { encryptedBallot, ballotCommitment } = encryptBallotOnDevice(
-        selectedCandidate.candidateIndex,
-        election.encryptionPublicKey || 'MOCK_PUBLIC_KEY'
-      );
+      // Retrieve locally saved credential or fetch from proof
+      let voterCred = getVoterCredential(election.electionId);
 
       // Step 2: Fetch Merkle Proof from eligibility registry
       setStep(2);
       await new Promise((r) => setTimeout(r, 500));
 
-      let proofResponse;
+      let proofResponse = null;
       try {
-        proofResponse = await api.getCredentialProof(election.electionId, commitment);
+        proofResponse = await api.getCredentialProof(
+          election.electionId,
+          voterCred?.commitment
+        );
       } catch (e) {
-        // Fallback for demo tree proof
-        proofResponse = {
-          success: true,
-          data: {
-            leaf: commitment,
-            proof: [],
-          },
-        };
+        console.warn('Proof fetch note:', e.message);
       }
 
-      const merkleProof = proofResponse.data?.proof || [];
+      let commitment = voterCred?.commitment;
+      let secretKey = voterCred?.secretKey;
+
+      if (proofResponse?.data?.leaf) {
+        commitment = proofResponse.data.leaf;
+      }
+
+      if (!secretKey) {
+        const generated = createVoterSecrets();
+        secretKey = generated.secretKey;
+        if (!commitment) {
+          commitment = computeCommitment(secretKey, generated.salt);
+        }
+        saveVoterCredential(election.electionId, {
+          secretKey,
+          salt: generated.salt,
+          commitment,
+        });
+      }
+
+      const nullifier = computeNullifier(secretKey, election.electionId);
+      const merkleProof = proofResponse?.data?.proof || [];
+
+      const { encryptedBallot, ballotCommitment } = encryptBallotOnDevice(
+        selectedCandidate.candidateIndex,
+        election.encryptionPublicKey || 'MOCK_PUBLIC_KEY'
+      );
 
       // Step 3: Broadcast transaction to blockchain relay
       setStep(3);
