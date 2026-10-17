@@ -48,6 +48,7 @@ blockchain-voting-system/
 │   ├── src/         # Verification engine
 │   └── tests/       # Verifier test suite
 └── docs/            # Comprehensive engineering documentation
+    ├── PROJECT_EXPLANATION.md  # Detailed Flow, Blockchain Architecture & Viva Guide
     ├── SRS.md
     ├── ARCHITECTURE.md
     ├── DECISIONS.md
