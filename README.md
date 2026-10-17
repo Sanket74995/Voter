@@ -177,3 +177,4 @@ Detailed specifications are available in the [`docs/`](file:///c:/Users/Sanket/D
 - [Test Execution & Security Validation Report](file:///c:/Users/Sanket/Desktop/college/Voting/docs/TESTING_REPORT.md)
 - [Deployment & Setup Guide](file:///c:/Users/Sanket/Desktop/college/Voting/docs/DEPLOYMENT.md)
 - [Implementation Progress Log](file:///c:/Users/Sanket/Desktop/college/Voting/docs/IMPLEMENTATION_STATUS.md)
+# Voter
