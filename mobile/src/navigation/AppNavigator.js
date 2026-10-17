@@ -141,7 +141,7 @@ export const AppNavigator = () => {
         )}
 
         {currentScreen === 'ONBOARDING' && (
-          <OnboardingScreen onGetStarted={() => setCurrentScreen('LOGIN')} />
+          <OnboardingScreen onGetStarted={() => navigateTo('LOGIN')} />
         )}
 
         {currentScreen === 'LOGIN' && (

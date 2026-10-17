@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { colors, typography, spacing } from '../../theme/colors';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Platform,
+  StatusBar,
+} from 'react-native';
+import { colors, typography, spacing, radius, shadows } from '../../theme/colors';
 import { Input } from '../../components/Input';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { api } from '../../services/api';
 
-export const LoginScreen = ({ onLoginSuccess }) => {
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0;
+
+export const LoginScreen = ({ onLoginSuccess, onBack }) => {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  
+
   // Server Gateway configuration
   const [serverUrl, setServerUrl] = useState(api.baseUrl);
   const [showServerConfig, setShowServerConfig] = useState(false);
@@ -26,7 +37,7 @@ export const LoginScreen = ({ onLoginSuccess }) => {
 
   const handleLogin = async () => {
     if (!identifier || !password) {
-      setErrorMessage('Please provide your Voter ID/Email and password.');
+      setErrorMessage('Please enter your Voter ID or Email and password.');
       return;
     }
 
@@ -39,7 +50,7 @@ export const LoginScreen = ({ onLoginSuccess }) => {
         onLoginSuccess(response.data.user);
       }
     } catch (err) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.message || 'Incorrect credentials. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -47,7 +58,7 @@ export const LoginScreen = ({ onLoginSuccess }) => {
 
   const handleRegister = async () => {
     if (!voterId || !fullName || !email || !password) {
-      setErrorMessage('All registration fields are required.');
+      setErrorMessage('Please fill in all registration fields.');
       return;
     }
 
@@ -60,7 +71,7 @@ export const LoginScreen = ({ onLoginSuccess }) => {
         onLoginSuccess(response.data.user);
       }
     } catch (err) {
-      setErrorMessage(err.message);
+      setErrorMessage(err.message || 'Registration failed. Please check your details.');
     } finally {
       setLoading(false);
     }
@@ -71,70 +82,100 @@ export const LoginScreen = ({ onLoginSuccess }) => {
       setIdentifier('commissioner@test.com');
       setPassword('AdminPassword123!');
     } else if (role === 'voter') {
-      setIdentifier('alice@test.com');
-      setPassword('VoterPassword123!');
+      setIdentifier('VOTER-2026-101');
+      setPassword('Password@123');
     } else if (role === 'party_rep') {
       setIdentifier('party_rep@test.com');
       setPassword('PartyRep123!');
     }
+    setErrorMessage('');
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+    >
+      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" translucent />
+
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logoBadge}>🗳️</Text>
+        <View style={styles.logoBadgeContainer}>
+          <Text style={styles.logoBadge}>🗳️</Text>
+        </View>
         <Text style={styles.appTitle}>Civic Voting Portal</Text>
         <Text style={styles.screenSubtitle}>
-          {isRegisterMode ? 'Register an identity record' : 'Access your secure voting profile'}
+          {isRegisterMode
+            ? 'Create a new verified voter account'
+            : 'Sign in to access elections and vote securely'}
         </Text>
       </View>
 
+      {/* Error Notification */}
       {errorMessage ? (
         <View style={styles.errorBox}>
+          <Text style={styles.errorIcon}>⚠️</Text>
           <Text style={styles.errorBoxText}>{errorMessage}</Text>
         </View>
       ) : null}
 
-      <Card style={styles.formCard}>
+      {/* Form Card */}
+      <Card variant="elevated" style={styles.formCard}>
         {isRegisterMode ? (
           <>
             <Input
-              label="Official Voter ID"
-              placeholder="e.g. VOTER-2026-001"
+              label="Voter ID"
+              placeholder="e.g. VOTER-2026-120"
               value={voterId}
               onChangeText={setVoterId}
               autoCapitalize="characters"
             />
             <Input
               label="Full Name"
-              placeholder="Your Legal Name"
+              placeholder="Your full name"
               value={fullName}
               onChangeText={setFullName}
             />
             <Input
               label="Email Address"
-              placeholder="voter@example.edu"
+              placeholder="voter@example.com"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
             />
             <Input
               label="Password"
-              placeholder="Create strong password"
+              placeholder="Create a password"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
             />
-            <Text style={styles.roleLabel}>Account Role</Text>
+
+            <Text style={styles.roleLabel}>Account Type</Text>
             <View style={styles.roleToggleRow}>
-              {['voter', 'admin', 'party_rep'].map((role) => (
+              {[
+                { key: 'voter', label: 'Voter' },
+                { key: 'admin', label: 'Admin' },
+                { key: 'party_rep', label: 'Candidate Rep' },
+              ].map((item) => (
                 <TouchableOpacity
-                  key={role}
-                  onPress={() => setSelectedRole(role)}
-                  style={[styles.roleChip, selectedRole === role && styles.roleChipActive]}
+                  key={item.key}
+                  onPress={() => setSelectedRole(item.key)}
+                  style={[
+                    styles.roleChip,
+                    selectedRole === item.key && styles.roleChipActive,
+                  ]}
+                  activeOpacity={0.7}
                 >
-                  <Text style={[styles.roleChipText, selectedRole === role && styles.roleChipTextActive]}>
-                    {role.replace('_', ' ').toUpperCase()}
+                  <Text
+                    style={[
+                      styles.roleChipText,
+                      selectedRole === item.key && styles.roleChipTextActive,
+                    ]}
+                  >
+                    {item.label}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -144,16 +185,17 @@ export const LoginScreen = ({ onLoginSuccess }) => {
               title="Create Account"
               onPress={handleRegister}
               loading={loading}
-              style={{ marginTop: spacing.md }}
+              style={{ marginTop: spacing.sm }}
             />
           </>
         ) : (
           <>
             <Input
-              label="Voter ID or Registered Email"
-              placeholder="Enter ID or email"
+              label="Voter ID or Email Address"
+              placeholder="e.g. VOTER-2026-101 or email"
               value={identifier}
               onChangeText={setIdentifier}
+              autoCapitalize="none"
             />
             <Input
               label="Password"
@@ -166,7 +208,7 @@ export const LoginScreen = ({ onLoginSuccess }) => {
               title="Sign In Securely"
               onPress={handleLogin}
               loading={loading}
-              style={{ marginTop: spacing.sm }}
+              style={{ marginTop: spacing.xs }}
             />
           </>
         )}
@@ -177,23 +219,55 @@ export const LoginScreen = ({ onLoginSuccess }) => {
             setIsRegisterMode(!isRegisterMode);
             setErrorMessage('');
           }}
+          activeOpacity={0.7}
         >
           <Text style={styles.switchModeText}>
             {isRegisterMode
-              ? 'Already registered? Sign In'
-              : "Don't have an approved account? Register here"}
+              ? 'Already registered? Sign In instead'
+              : 'Need a new account? Register here'}
           </Text>
         </TouchableOpacity>
       </Card>
+
+      {/* Quick-Fill Demo Accounts for Evaluation */}
+      {!isRegisterMode && (
+        <Card variant="subtle" style={styles.demoBox}>
+          <Text style={styles.demoTitle}>Quick Fill (Test Accounts):</Text>
+          <View style={styles.demoButtonRow}>
+            <TouchableOpacity
+              onPress={() => applyDemoRole('admin')}
+              style={styles.demoChip}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.demoChipText}>👔 Admin</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => applyDemoRole('voter')}
+              style={styles.demoChip}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.demoChipText}>🗳️ Voter (101)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => applyDemoRole('party_rep')}
+              style={styles.demoChip}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.demoChipText}>📢 Party Rep</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
+      )}
 
       {/* Server Gateway Configuration */}
       <View style={styles.serverBox}>
         <TouchableOpacity
           onPress={() => setShowServerConfig(!showServerConfig)}
           style={styles.serverHeaderRow}
+          activeOpacity={0.7}
         >
           <Text style={styles.serverInfoText} numberOfLines={1}>
-            🌐 Gateway: {api.baseUrl}
+            🌐 Server: {api.baseUrl}
           </Text>
           <Text style={styles.serverEditText}>{showServerConfig ? 'Close' : 'Change'}</Text>
         </TouchableOpacity>
@@ -219,24 +293,6 @@ export const LoginScreen = ({ onLoginSuccess }) => {
           </View>
         )}
       </View>
-
-      {/* Demo Credentials Quick-Filler for Evaluation */}
-      {!isRegisterMode && (
-        <View style={styles.demoBox}>
-          <Text style={styles.demoTitle}>Examiner Quick Fill (Demo Accounts):</Text>
-          <View style={styles.demoButtonRow}>
-            <TouchableOpacity onPress={() => applyDemoRole('admin')} style={styles.demoChip}>
-              <Text style={styles.demoChipText}>👔 Admin</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => applyDemoRole('voter')} style={styles.demoChip}>
-              <Text style={styles.demoChipText}>🗳️ Voter</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => applyDemoRole('party_rep')} style={styles.demoChip}>
-              <Text style={styles.demoChipText}>📢 Party Rep</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
     </ScrollView>
   );
 };
@@ -244,126 +300,150 @@ export const LoginScreen = ({ onLoginSuccess }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#F8FAFC',
   },
   content: {
-    padding: spacing.lg,
-    paddingTop: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: STATUS_BAR_HEIGHT + spacing.md,
+    paddingBottom: spacing.xxl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
+  },
+  logoBadgeContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.xl,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    ...shadows.sm,
   },
   logoBadge: {
-    fontSize: 48,
-    marginBottom: spacing.sm,
+    fontSize: 32,
   },
   appTitle: {
     ...typography.titleLarge,
-    color: colors.primary,
+    fontSize: 24,
+    color: '#0F172A',
+    fontWeight: '800',
   },
   screenSubtitle: {
     ...typography.bodyMedium,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
+    color: '#64748B',
+    marginTop: 4,
+    textAlign: 'center',
   },
   formCard: {
     padding: spacing.lg,
+    marginBottom: spacing.md,
   },
   errorBox: {
-    backgroundColor: colors.dangerBg,
-    borderRadius: 8,
-    padding: spacing.md,
+    backgroundColor: '#FEF2F2',
+    borderRadius: radius.md,
+    padding: spacing.md - 2,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: '#FECACA',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  errorIcon: {
+    fontSize: 16,
   },
   errorBoxText: {
     ...typography.bodyMedium,
-    color: colors.danger,
+    color: '#B91C1C',
+    flex: 1,
     fontWeight: '500',
   },
   roleLabel: {
-    ...typography.bodyMedium,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    ...typography.labelMedium,
+    color: '#475569',
+    marginTop: spacing.xs,
     marginBottom: spacing.xs,
   },
   roleToggleRow: {
     flexDirection: 'row',
-    marginBottom: spacing.sm,
+    gap: spacing.xs + 2,
+    marginBottom: spacing.md,
   },
   roleChip: {
     flex: 1,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surfaceSubtle,
-    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: radius.md,
     alignItems: 'center',
-    marginRight: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
   },
   roleChipActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
   roleChipText: {
-    ...typography.badge,
-    color: colors.textSecondary,
+    ...typography.labelSmall,
+    color: '#64748B',
+    fontWeight: '700',
   },
   roleChipTextActive: {
     color: colors.textInverse,
   },
   switchModeButton: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     alignItems: 'center',
+    paddingVertical: 4,
   },
   switchModeText: {
-    ...typography.bodyMedium,
-    color: colors.accent,
-    fontWeight: '600',
+    ...typography.labelMedium,
+    color: '#2563EB',
+    fontWeight: '700',
   },
+
+  // Demo Credentials Box
   demoBox: {
-    marginTop: spacing.lg,
     padding: spacing.md,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginBottom: spacing.md,
   },
   demoTitle: {
-    ...typography.bodySmall,
+    ...typography.labelSmall,
     fontWeight: '700',
-    color: colors.textSecondary,
+    color: '#64748B',
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   demoButtonRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacing.xs + 2,
   },
   demoChip: {
     flex: 1,
-    backgroundColor: colors.surfaceSubtle,
+    backgroundColor: colors.surface,
     paddingVertical: spacing.sm,
-    borderRadius: 8,
-    marginHorizontal: spacing.xs,
+    borderRadius: radius.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.borderDark,
+    borderColor: '#E2E8F0',
+    ...shadows.sm,
   },
   demoChipText: {
-    ...typography.bodySmall,
-    fontWeight: '600',
-    color: colors.primary,
+    ...typography.labelSmall,
+    fontWeight: '700',
+    color: '#0F172A',
   },
+
+  // Server Box
   serverBox: {
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: colors.surfaceSubtle,
-    borderRadius: 8,
+    padding: spacing.sm + 2,
+    backgroundColor: '#F1F5F9',
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.borderDark,
+    borderColor: '#E2E8F0',
   },
   serverHeaderRow: {
     flexDirection: 'row',
@@ -371,15 +451,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   serverInfoText: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    ...typography.bodySmall,
+    color: '#64748B',
     flex: 1,
-    marginRight: spacing.xs,
+    fontSize: 11,
   },
   serverEditText: {
-    ...typography.caption,
-    color: colors.accent,
+    ...typography.labelSmall,
+    color: '#2563EB',
     fontWeight: '700',
+    marginLeft: spacing.sm,
   },
   serverEditForm: {
     marginTop: spacing.sm,
