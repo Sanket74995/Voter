@@ -103,6 +103,7 @@ class BlockchainService {
     endTime = Math.floor(Date.now() / 1000) + 86400,
     encryptionPublicKey = '0x00',
     credentialRoot = '0x' + '1'.repeat(64),
+    leafCommitment = null,
   }) {
     if (!this.contracts.electionManager) {
       console.warn('[BlockchainService] ElectionManager not initialized');
@@ -164,10 +165,16 @@ class BlockchainService {
       }
 
       console.log(`[BlockchainService] Freezing election ${onChainElectionId} with credentialRoot ${credentialRoot}...`);
-      const safeRoot =
-        credentialRoot && credentialRoot !== '0x' && credentialRoot.length === 66
-          ? credentialRoot
-          : '0x' + '1'.repeat(64);
+      const isDummy =
+        !credentialRoot ||
+        credentialRoot === '0x' ||
+        credentialRoot.startsWith('0x11111111') ||
+        credentialRoot.length !== 66;
+      const safeRoot = !isDummy
+        ? credentialRoot
+        : leafCommitment && leafCommitment.length === 66
+        ? leafCommitment
+        : '0x' + '1'.repeat(64);
       const freezeNonce = await this.getNextNonce();
       const freezeTx = await this.contracts.electionManager.freezeElection(id, safeRoot, { nonce: freezeNonce });
       await freezeTx.wait();
@@ -207,6 +214,7 @@ class BlockchainService {
       endTime: electionDetails.endTime,
       encryptionPublicKey: electionDetails.encryptionPublicKey,
       credentialRoot: electionDetails.credentialRoot || leafCommitment,
+      leafCommitment,
     });
 
     const tx = await this.contracts.voting.castBallot(

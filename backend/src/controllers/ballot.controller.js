@@ -1,5 +1,7 @@
 const Election = require('../models/Election');
 const Party = require('../models/Party');
+const CredentialIssuance = require('../models/CredentialIssuance');
+const { CredentialMerkleTree } = require('../utils/crypto');
 const blockchainService = require('../blockchain/blockchainService');
 const { logAudit } = require('../audit/auditLogger');
 
@@ -90,6 +92,26 @@ const submitBallot = async (req, res, next) => {
     // Convert onChainElectionId (default to numeric hash if not explicitly set)
     const onChainId = election.onChainElectionId || (Math.abs(hashString(election.electionId)) % 1000000) + 1;
 
+    // Sync effective credential Merkle root from active credentials
+    let effectiveCredentialRoot = election.credentialRoot;
+    const activeCreds = await CredentialIssuance.find({
+      electionId,
+      status: 'ACTIVE',
+    });
+    if (activeCreds.length > 0) {
+      const leaves = activeCreds.map((c) => c.commitment);
+      const tree = new CredentialMerkleTree(leaves);
+      effectiveCredentialRoot = tree.getRoot();
+      if (election.credentialRoot !== effectiveCredentialRoot) {
+        election.credentialRoot = effectiveCredentialRoot;
+        await election.save();
+      }
+    } else if (!effectiveCredentialRoot || effectiveCredentialRoot.startsWith('0x11111111')) {
+      effectiveCredentialRoot = formattedLeaf;
+      election.credentialRoot = effectiveCredentialRoot;
+      await election.save();
+    }
+
     let relayReceipt;
     try {
       relayReceipt = await blockchainService.relayBallot({
@@ -104,7 +126,7 @@ const submitBallot = async (req, res, next) => {
           startTime: Math.floor(new Date(election.startTime).getTime() / 1000),
           endTime: Math.floor(new Date(election.endTime).getTime() / 1000),
           encryptionPublicKey: election.encryptionPublicKey,
-          credentialRoot: election.credentialRoot,
+          credentialRoot: effectiveCredentialRoot,
         },
       });
     } catch (blockchainError) {
