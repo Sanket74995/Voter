@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = 'http://192.168.1.101:5000/api';
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5000/api';
 
 class ApiClient {
   constructor() {

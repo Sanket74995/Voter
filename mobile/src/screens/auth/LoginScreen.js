@@ -117,7 +117,39 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
       {errorMessage ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorIcon}>⚠️</Text>
-          <Text style={styles.errorBoxText}>{errorMessage}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.errorBoxText}>{errorMessage}</Text>
+            {errorMessage.includes('Connection timed out') && (
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    const usbUrl = 'http://127.0.0.1:5000/api';
+                    api.setBaseUrl(usbUrl);
+                    setServerUrl(usbUrl);
+                    setErrorMessage('');
+                    Alert.alert('Switched to USB Mode', 'Server set to http://127.0.0.1:5000/api. Tap Sign In now!');
+                  }}
+                  style={styles.quickFixButton}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.quickFixButtonText}>🔌 Use USB (127.0.0.1)</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    const wifiUrl = 'http://10.188.154.135:5000/api';
+                    api.setBaseUrl(wifiUrl);
+                    setServerUrl(wifiUrl);
+                    setErrorMessage('');
+                    Alert.alert('Switched to Wi-Fi Mode', 'Server set to http://10.188.154.135:5000/api. Ensure phone is on same Wi-Fi!');
+                  }}
+                  style={styles.quickFixButton}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.quickFixButtonText}>📶 Use Wi-Fi</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
       ) : null}
 
@@ -274,22 +306,78 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
 
         {showServerConfig && (
           <View style={styles.serverEditForm}>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 6 }}>
+              Quick Presets:
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+              <TouchableOpacity
+                onPress={() => setServerUrl('http://127.0.0.1:5000/api')}
+                style={[
+                  styles.presetChip,
+                  serverUrl.includes('127.0.0.1') && styles.presetChipActive,
+                ]}
+              >
+                <Text style={[styles.presetChipText, serverUrl.includes('127.0.0.1') && styles.presetChipTextActive]}>
+                  🔌 USB Cable (127.0.0.1)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setServerUrl('http://10.188.154.135:5000/api')}
+                style={[
+                  styles.presetChip,
+                  serverUrl.includes('10.188.154') && styles.presetChipActive,
+                ]}
+              >
+                <Text style={[styles.presetChipText, serverUrl.includes('10.188.154') && styles.presetChipTextActive]}>
+                  📶 Wi-Fi (10.188.154.135)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <Input
               label="Backend Server URL"
-              placeholder="http://192.168.1.101:5000/api"
+              placeholder="http://127.0.0.1:5000/api"
               value={serverUrl}
               onChangeText={setServerUrl}
             />
-            <Button
-              title="Save & Connect"
-              variant="outline"
-              onPress={() => {
-                api.setBaseUrl(serverUrl.trim());
-                setShowServerConfig(false);
-                Alert.alert('Server Updated', `API endpoint set to: ${api.baseUrl}`);
-              }}
-              style={{ marginTop: spacing.xs }}
-            />
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: spacing.xs }}>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Save & Connect"
+                  variant="outline"
+                  onPress={() => {
+                    api.setBaseUrl(serverUrl.trim());
+                    setShowServerConfig(false);
+                    setErrorMessage('');
+                    Alert.alert('Server Updated', `API endpoint set to: ${api.baseUrl}`);
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Button
+                  title="Test Connection"
+                  variant="ghost"
+                  onPress={async () => {
+                    try {
+                      api.setBaseUrl(serverUrl.trim());
+                      const res = await fetch(`${api.baseUrl.replace(/\/api$/, '')}/health`, {
+                        signal: AbortSignal.timeout(3500),
+                      });
+                      if (res.ok) {
+                        Alert.alert('✅ Connected!', 'Backend server is reachable and active.');
+                      } else {
+                        Alert.alert('⚠️ Server Responded with Error', `HTTP ${res.status}`);
+                      }
+                    } catch (e) {
+                      Alert.alert(
+                        '❌ Connection Failed',
+                        'Could not connect. If using USB, run "adb reverse tcp:5000 tcp:5000". If Wi-Fi, ensure PC and phone are on same network.'
+                      );
+                    }
+                  }}
+                />
+              </View>
+            </View>
           </View>
         )}
       </View>
@@ -464,5 +552,39 @@ const styles = StyleSheet.create({
   },
   serverEditForm: {
     marginTop: spacing.sm,
+  },
+  quickFixButton: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  quickFixButtonText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+  presetChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    backgroundColor: '#E2E8F0',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  presetChipActive: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#3B82F6',
+  },
+  presetChipText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  presetChipTextActive: {
+    color: '#1D4ED8',
+    fontWeight: '700',
   },
 });
