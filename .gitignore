@@ -21,6 +21,8 @@ mobile/android/build/
 mobile/.bundle/
 mobile/ios/Pods/
 mobile/ios/build/
+*.apk
+*.aab
 
 # Hardhat & Solc
 contracts/cache/

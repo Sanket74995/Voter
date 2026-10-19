@@ -11,7 +11,7 @@ module.exports = {
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/blockchain_voting',
   JWT_SECRET: process.env.JWT_SECRET || 'dev_secret_key_voting_system_academic_2026_xyz',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '1d',
-  HARDHAT_RPC_URL: process.env.HARDHAT_RPC_URL || 'http://127.0.0.1:8545',
+  HARDHAT_RPC_URL: process.env.BLOCKCHAIN_RPC_URL || process.env.HARDHAT_RPC_URL || 'http://127.0.0.1:8545',
   DEPLOYER_PRIVATE_KEY: process.env.DEPLOYER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
   ELECTION_MANAGER_ADDRESS: process.env.ELECTION_MANAGER_ADDRESS || '',
   VOTING_CONTRACT_ADDRESS: process.env.VOTING_CONTRACT_ADDRESS || '',

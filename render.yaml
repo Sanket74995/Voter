@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: blockchain-voting-backend
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: BLOCKCHAIN_RPC_URL
+        value: https://rpc-amoy.polygon.technology
+      - key: DEPLOYER_PRIVATE_KEY
+        sync: false
+      - key: ELECTION_MANAGER_ADDRESS
+        sync: false
+      - key: PROOF_VERIFIER_ADDRESS
+        sync: false
+      - key: VOTING_CONTRACT_ADDRESS
+        sync: false
+      - key: TALLY_REGISTRY_ADDRESS
+        sync: false

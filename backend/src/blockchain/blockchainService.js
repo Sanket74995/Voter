@@ -13,6 +13,11 @@ class BlockchainService {
   }
 
   loadAbi(contractName) {
+    const localPath = path.resolve(__dirname, `abis/${contractName}.json`);
+    if (fs.existsSync(localPath)) {
+      const artifact = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+      return artifact.abi || artifact;
+    }
     const artifactPath = path.resolve(
       __dirname,
       `../../../contracts/artifacts/contracts/${contractName}.sol/${contractName}.json`
