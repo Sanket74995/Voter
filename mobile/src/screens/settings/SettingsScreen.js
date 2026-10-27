@@ -11,9 +11,13 @@ import { api } from '../../services/api';
 export const SettingsScreen = ({ user, onBack, onLogout }) => {
   const [customApiUrl, setCustomApiUrl] = useState(api.baseUrl);
 
-  const handleUpdateApiUrl = () => {
-    api.setBaseUrl(customApiUrl.trim());
-    Alert.alert('Network Updated', `API endpoint set to: ${api.baseUrl}`);
+  const handleUpdateApiUrl = async () => {
+    try {
+      await api.setBaseUrl(customApiUrl.trim());
+      Alert.alert('Network Updated', `API endpoint set to: ${api.baseUrl}`);
+    } catch (err) {
+      Alert.alert('Invalid Server URL', err.message || 'Could not save the server address.');
+    }
   };
 
   const handleLogout = async () => {

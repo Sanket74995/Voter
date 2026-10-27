@@ -1,13 +1,39 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5000/api';
+const API_BASE_URL_STORAGE_KEY = '@voter/apiBaseUrl';
 
 class ApiClient {
   constructor() {
-    this.baseUrl = DEFAULT_API_BASE_URL;
+    this.baseUrl =
+      Platform.OS === 'android'
+        ? 'http://10.0.2.2:5000/api'
+        : DEFAULT_API_BASE_URL;
     this.token = null;
   }
 
-  setBaseUrl(url) {
-    this.baseUrl = url.endsWith('/api') ? url : `${url}/api`;
+  async initialize() {
+    const savedBaseUrl = await AsyncStorage.getItem(API_BASE_URL_STORAGE_KEY);
+    if (savedBaseUrl) {
+      this.baseUrl = this.normalizeBaseUrl(savedBaseUrl);
+    }
+    return this.baseUrl;
+  }
+
+  normalizeBaseUrl(url) {
+    const trimmedUrl = url.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\/[^/]+(?:\/.*)?$/i.test(trimmedUrl)) {
+      throw new Error('Enter a valid server URL beginning with http:// or https://.');
+    }
+    return trimmedUrl.endsWith('/api') ? trimmedUrl : `${trimmedUrl}/api`;
+  }
+
+  async setBaseUrl(url) {
+    const baseUrl = this.normalizeBaseUrl(url);
+    await AsyncStorage.setItem(API_BASE_URL_STORAGE_KEY, baseUrl);
+    this.baseUrl = baseUrl;
+    return this.baseUrl;
   }
 
   setToken(token) {
@@ -49,7 +75,12 @@ class ApiClient {
       clearTimeout(timeoutId);
       if (err.name === 'AbortError') {
         throw new Error(
-          `Connection timed out (${this.baseUrl}). Ensure your phone and PC are on the same Wi-Fi and port 5000 is open.`
+          `Connection timed out (${this.baseUrl}). Check that the backend is running and that your phone and PC can reach each other.`
+        );
+      }
+      if (err.message === 'Network request failed') {
+        throw new Error(
+          `Cannot reach ${this.baseUrl}. Start the backend. For an Android emulator use 10.0.2.2; for a USB-connected phone run "adb reverse tcp:5000 tcp:5000"; for Wi-Fi use your PC's local IP.`
         );
       }
       throw new Error(err.message || 'Network request failed. Ensure backend is running.');
@@ -190,4 +221,5 @@ class ApiClient {
   }
 }
 
+export { ApiClient };
 export const api = new ApiClient();

@@ -167,12 +167,34 @@ export const VoterEligibilityManagementScreen = ({ onBack }) => {
     setVoterIds(nextIds.join('\n'));
   };
 
-  const handleLoadGeneratedVoters = () => {
-    setVoterIds(GENERATED_VOTERS.join('\n'));
-    Alert.alert(
-      'Ready to Register',
-      'Added 15 demo voters to your list. Tap the button below to confirm adding them to the election.'
-    );
+  const handleLoadGeneratedVoters = async () => {
+    try {
+      const res = await api.getRegisteredVoters();
+      if (!res.success || !res.data?.voters) {
+        throw new Error(res.error || 'The voter directory response was invalid.');
+      }
+
+      const registeredIds = new Set(res.data.voters.map((voter) => voter.voterId));
+      const availableIds = GENERATED_VOTERS.filter((id) => registeredIds.has(id));
+      if (availableIds.length === 0) {
+        Alert.alert(
+          'Demo Accounts Not Found',
+          'These demo voter IDs are not accounts in the database yet. Start MongoDB, then run "npm --prefix backend run seed:voters" from the project folder.'
+        );
+        return;
+      }
+
+      setVoterIds(availableIds.join('\n'));
+      Alert.alert(
+        'Ready to Register',
+        `${availableIds.length} registered demo voter account(s) added to the list. Tap the button below to approve them for this election.`
+      );
+    } catch (err) {
+      Alert.alert(
+        'Could Not Load Demo Voters',
+        `${err.message} Check that the backend and database are running.`
+      );
+    }
   };
 
   const handleOpenRegistryModal = async () => {
@@ -181,21 +203,21 @@ export const VoterEligibilityManagementScreen = ({ onBack }) => {
     try {
       if (api.getRegisteredVoters) {
         const res = await api.getRegisteredVoters();
-        if (res.success && res.data?.voters) {
-          setRegistryVoters(res.data.voters);
-          const allIds = new Set(res.data.voters.map((v) => v.voterId));
-          setSelectedVoterIds(allIds);
+        if (!res.success || !res.data?.voters) {
+          throw new Error(res.error || 'The voter directory response was invalid.');
         }
+        setRegistryVoters(res.data.voters);
+        const allIds = new Set(res.data.voters.map((v) => v.voterId));
+        setSelectedVoterIds(allIds);
       }
     } catch (err) {
       console.warn('Failed to load registered voters:', err.message);
-      const fallbackList = GENERATED_VOTERS.map((id, idx) => ({
-        voterId: id,
-        fullName: `Voter ${idx + 1}`,
-        email: `${id.toLowerCase()}@voting.edu`,
-      }));
-      setRegistryVoters(fallbackList);
-      setSelectedVoterIds(new Set(GENERATED_VOTERS));
+      setRegistryVoters([]);
+      setSelectedVoterIds(new Set());
+      Alert.alert(
+        'Could Not Load Voter Directory',
+        `${err.message} Check that the backend and database are running.`
+      );
     } finally {
       setRegistryLoading(false);
     }
@@ -528,7 +550,7 @@ export const VoterEligibilityManagementScreen = ({ onBack }) => {
           <View style={{ flex: 1 }}>
             <Text style={styles.cardTitle}>Step 2: Add Voters</Text>
             <Text style={styles.cardDesc}>
-              Quickly load test voters, pick from database, or paste a list.
+              Load registered demo accounts, pick from the database, or paste voter IDs.
             </Text>
           </View>
         </View>
@@ -546,8 +568,8 @@ export const VoterEligibilityManagementScreen = ({ onBack }) => {
                 <Text style={styles.pillEmeraldText}>1-Tap Demo</Text>
               </View>
             </View>
-            <Text style={styles.actionTileTitle}>Add 15 Demo Voters</Text>
-            <Text style={styles.actionTileSub}>Instantly fills VOTER-101 to 115</Text>
+            <Text style={styles.actionTileTitle}>Load Demo Voter IDs</Text>
+            <Text style={styles.actionTileSub}>Only accounts already in the database are loaded</Text>
           </TouchableOpacity>
 
           {/* Tile 2: Database Registry Browser */}
@@ -606,7 +628,7 @@ export const VoterEligibilityManagementScreen = ({ onBack }) => {
                   <Text style={styles.emptyChipsIcon}>📋</Text>
                   <Text style={styles.emptyChipsText}>No voters in the list yet</Text>
                   <Text style={styles.emptyChipsSub}>
-                    Tap "Add 15 Demo Voters" above, pick from the list, or switch to "Type / Paste" to enter IDs.
+                    Load registered demo accounts, pick from the database, or switch to "Type / Paste" to enter IDs.
                   </Text>
                 </View>
               ) : (

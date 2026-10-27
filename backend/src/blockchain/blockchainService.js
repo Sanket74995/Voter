@@ -5,11 +5,40 @@ const env = require('../config/env');
 
 class BlockchainService {
   constructor() {
-    this.provider = new ethers.JsonRpcProvider(env.HARDHAT_RPC_URL);
+    this.provider = new ethers.JsonRpcProvider(
+      env.HARDHAT_RPC_URL,
+      undefined,
+      { cacheTimeout: -1 }
+    );
     this.wallet = new ethers.Wallet(env.DEPLOYER_PRIVATE_KEY, this.provider);
+    this.transactionSigner = new ethers.NonceManager(this.wallet);
     this.contracts = {};
-    this.currentNonce = null;
+    this.transactionQueue = Promise.resolve();
     this.initContracts();
+  }
+
+  runTransaction(operation) {
+    const result = this.transactionQueue.then(async () => {
+      for (let attempt = 0; ; attempt++) {
+        this.transactionSigner.reset();
+        try {
+          return await operation();
+        } catch (error) {
+          const nonceOutOfSync =
+            error.code === 'NONCE_EXPIRED' ||
+            /nonce too low|nonce has already been used/i.test(error.message || '');
+          if (!nonceOutOfSync || attempt >= 1) {
+            throw error;
+          }
+          console.warn('[BlockchainService] Retrying transaction after refreshing the account nonce.');
+        }
+      }
+    });
+    this.transactionQueue = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
   }
 
   loadAbi(contractName) {
@@ -51,7 +80,7 @@ class BlockchainService {
         this.contracts.electionManager = new ethers.Contract(
           addresses.ElectionManager,
           electionManagerAbi,
-          this.wallet
+          this.transactionSigner
         );
       }
 
@@ -59,7 +88,7 @@ class BlockchainService {
         this.contracts.voting = new ethers.Contract(
           addresses.Voting,
           votingAbi,
-          this.wallet
+          this.transactionSigner
         );
       }
 
@@ -67,7 +96,7 @@ class BlockchainService {
         this.contracts.tallyRegistry = new ethers.Contract(
           addresses.TallyRegistry,
           tallyRegistryAbi,
-          this.wallet
+          this.transactionSigner
         );
       }
 
@@ -75,22 +104,12 @@ class BlockchainService {
         this.contracts.proofVerifier = new ethers.Contract(
           addresses.ProofVerifier,
           proofVerifierAbi,
-          this.wallet
+          this.transactionSigner
         );
       }
     } catch (err) {
       console.warn('[BlockchainService] Contract initialization warning:', err.message);
     }
-  }
-
-  async getNextNonce() {
-    const chainNonce = await this.provider.getTransactionCount(this.wallet.address, 'pending');
-    if (this.currentNonce === null || chainNonce > this.currentNonce) {
-      this.currentNonce = chainNonce;
-    } else {
-      this.currentNonce++;
-    }
-    return this.currentNonce;
   }
 
   /**
@@ -139,14 +158,12 @@ class BlockchainService {
 
     if (!electionExists) {
       console.log(`[BlockchainService] Creating election ${onChainElectionId} on ElectionManager...`);
-      const nonce = await this.getNextNonce();
       const createTx = await this.contracts.electionManager.createElection(
         id,
         title || 'University Civic Election',
         BigInt(startTime || Math.floor(Date.now() / 1000) - 3600),
         BigInt(endTime || Math.floor(Date.now() / 1000) + 86400),
-        encryptionPublicKey || '0x00',
-        { nonce }
+        encryptionPublicKey || '0x00'
       );
       await createTx.wait();
       state = 0;
@@ -158,8 +175,7 @@ class BlockchainService {
       while (candidateCount < 2) {
         const candidateName = candidateCount === 0 ? 'Candidate Alpha' : 'Candidate Beta';
         console.log(`[BlockchainService] Registering candidate "${candidateName}"...`);
-        const nonce = await this.getNextNonce();
-        const candTx = await this.contracts.electionManager.registerCandidate(id, candidateName, { nonce });
+        const candTx = await this.contracts.electionManager.registerCandidate(id, candidateName);
         await candTx.wait();
         candidateCount++;
       }
@@ -175,16 +191,14 @@ class BlockchainService {
         : leafCommitment && leafCommitment.length === 66
         ? leafCommitment
         : '0x' + '1'.repeat(64);
-      const freezeNonce = await this.getNextNonce();
-      const freezeTx = await this.contracts.electionManager.freezeElection(id, safeRoot, { nonce: freezeNonce });
+      const freezeTx = await this.contracts.electionManager.freezeElection(id, safeRoot);
       await freezeTx.wait();
       state = 1;
     }
 
     if (state === 1) {
       console.log(`[BlockchainService] Opening election ${onChainElectionId} on ElectionManager...`);
-      const openNonce = await this.getNextNonce();
-      const openTx = await this.contracts.electionManager.openElection(id, { nonce: openNonce });
+      const openTx = await this.contracts.electionManager.openElection(id);
       await openTx.wait();
       console.log(`[BlockchainService] Election ${onChainElectionId} is now OPEN on-chain!`);
     }
@@ -194,6 +208,28 @@ class BlockchainService {
    * Relay anonymous ballot transaction to on-chain Voting contract
    */
   async relayBallot({
+    onChainElectionId,
+    nullifier,
+    ballotCommitment,
+    encryptedBallot,
+    leafCommitment,
+    merkleProof,
+    electionDetails = {},
+  }) {
+    return this.runTransaction(() =>
+      this.relayBallotUnlocked({
+        onChainElectionId,
+        nullifier,
+        ballotCommitment,
+        encryptedBallot,
+        leafCommitment,
+        merkleProof,
+        electionDetails,
+      })
+    );
+  }
+
+  async relayBallotUnlocked({
     onChainElectionId,
     nullifier,
     ballotCommitment,
@@ -279,6 +315,22 @@ class BlockchainService {
    * Publish tally on-chain in TallyRegistry
    */
   async publishTallyOnChain({ onChainElectionId, tallyCommitment, candidateVotes, trusteeProofReference }) {
+    return this.runTransaction(() =>
+      this.publishTallyOnChainUnlocked({
+        onChainElectionId,
+        tallyCommitment,
+        candidateVotes,
+        trusteeProofReference,
+      })
+    );
+  }
+
+  async publishTallyOnChainUnlocked({
+    onChainElectionId,
+    tallyCommitment,
+    candidateVotes,
+    trusteeProofReference,
+  }) {
     if (!this.contracts.tallyRegistry) {
       throw new Error('TallyRegistry contract is not configured on blockchain service.');
     }

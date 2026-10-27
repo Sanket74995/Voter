@@ -87,14 +87,34 @@ Copy `.env.example` to `.env` in the root and in `backend/`:
 cp .env.example .env
 ```
 
-### 3. Deploy Smart Contracts to Local Hardhat Network
-In a terminal, compile and deploy the contracts:
+After MongoDB is running, optionally create the 15 local demo voter accounts:
+```bash
+# Run from the project root:
+npm --prefix backend run seed:voters
+
+# Or, if your terminal is already in backend/:
+npm run seed:voters
+```
+This is for local demonstrations only. It creates demo accounts with the shared password `Password@123`; do not use these accounts or credentials in production. Real voters must have accounts in the system before an administrator can add them to an election.
+
+For each election, the administrator must add all voter accounts while it is in **DRAFT**. Each eligible voter must then sign in, open the draft election, and obtain their digital credential. Only after every voter has obtained a credential should the administrator freeze and open the election. Freezing locks the credential Merkle root, so voter eligibility and credentials cannot be added or revoked afterward.
+
+If a local test election was opened and a ballot was already cast before all voter credentials were issued, create a new election for further testing. Its on-chain Merkle root is immutable and cannot be repaired after voting has started.
+
+### 3. Start the Local Blockchain and Deploy Smart Contracts
+Start the local Hardhat node in one terminal and leave it running:
+```bash
+cd contracts
+npx hardhat node
+```
+
+In a second terminal, compile and deploy the contracts to that running node:
 ```bash
 cd contracts
 npx hardhat compile
-npx hardhat run scripts/deploy.js
+npx hardhat run scripts/deploy.js --network localhost
 ```
-The deployment manifest will automatically be written to `backend/src/blockchain/deployedContracts.json`.
+The deployment manifest will automatically be written to `backend/src/blockchain/deployedContracts.json`. The backend needs this node running to record votes. Start or restart the backend after deployment so it loads the current contract addresses. If you stop or restart the Hardhat node, its local chain state is reset; deploy the contracts again before voting.
 
 ### 4. Start the Express Backend
 ```bash
@@ -112,6 +132,8 @@ To run on an Android emulator or attached device:
 ```bash
 npx react-native run-android
 ```
+
+The Android emulator uses `http://10.0.2.2:5000/api` to reach the backend on your PC. For a USB-connected phone, run `adb reverse tcp:5000 tcp:5000` before signing in. For a phone over Wi-Fi, enter your PC's current local IP in the app's **Server > Change** settings (both devices must be on the same network, and Windows Firewall must allow port 5000). The app saves the server URL for the next launch. Local HTTP is enabled only for Android debug builds; use HTTPS for release deployments.
 
 ---
 
