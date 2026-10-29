@@ -139,7 +139,8 @@ const tallyAndPublish = async (req, res, next) => {
     const corruptedBallots = [];
 
     // Strictly authenticate and decrypt each on-chain ballot
-    for (const ballot of onChainBallots) {
+    const ballotsToProcess = (onChainBallots && onChainBallots.length > 0) ? onChainBallots : (election.recordedBallots || []);
+    for (const ballot of ballotsToProcess) {
       try {
         const decrypted = decryptBallot(ballot.encryptedBallot, electionPrivateKey);
         const idx = decrypted.candidateIndex;
@@ -187,7 +188,7 @@ const tallyAndPublish = async (req, res, next) => {
       });
     }
 
-    const totalBallots = onChainBallots.length;
+    const totalBallots = ballotsToProcess.length;
 
     // Cryptographic commitment to final tally: Hash(candidateVotes, root)
     const tallyCommitment = ethers.solidityPackedKeccak256(

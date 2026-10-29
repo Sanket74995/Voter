@@ -66,6 +66,18 @@ const electionSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    recordedBallots: [
+      {
+        nullifier: { type: String, required: true },
+        ballotCommitment: { type: String, required: true },
+        encryptedBallot: { type: String, required: true },
+        leafCommitment: String,
+        merkleProof: [String],
+        timestamp: { type: Date, default: Date.now },
+        onChain: { type: Boolean, default: false },
+        txHash: String,
+      },
+    ],
   },
   {
     timestamps: true,
