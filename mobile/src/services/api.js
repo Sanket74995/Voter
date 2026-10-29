@@ -4,10 +4,7 @@ import { Platform } from 'react-native';
 
 class ApiClient {
   constructor() {
-    this.baseUrl =
-      Platform.OS === 'android'
-        ? 'http://10.0.2.2:5000/api'
-        : DEFAULT_API_BASE_URL;
+    this.baseUrl = DEFAULT_API_BASE_URL;
     this.token = null;
   }
 
