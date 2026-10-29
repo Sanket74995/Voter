@@ -66,7 +66,7 @@ export const AdminDashboardScreen = ({
       if (res.success) {
         Alert.alert(
           'Election Setup Locked',
-          'Candidates, eligible voters, and their credential Merkle root are now locked in. You can now start voting whenever ready.'
+          'Candidates and eligible voters are now locked in. You can now start voting whenever ready.'
         );
         fetchElections();
       }

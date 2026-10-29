@@ -54,7 +54,7 @@ export const ElectionDetailsScreen = ({
 
       const res = await api.issueCredential(election.electionId, commitment);
       if (res.success) {
-        saveVoterCredential(user.voterId, election.electionId, { secretKey, salt, commitment });
+        saveVoterCredential(election.electionId, { secretKey, salt, commitment });
         Alert.alert(
           'Credential Issued',
           'Your cryptographic commitment has been registered into the election Merkle tree. Your secret key is stored locally on this device.',
@@ -119,18 +119,13 @@ export const ElectionDetailsScreen = ({
             />
           </View>
 
-          {isEligible && !hasCredential && election.status === 'DRAFT' && (
+          {isEligible && !hasCredential && (
             <Button
               title="Obtain Digital Credential"
               onPress={handleIssueCredential}
               loading={issuingCredential}
               style={{ marginTop: spacing.md }}
             />
-          )}
-          {isEligible && !hasCredential && election.status !== 'DRAFT' && (
-            <Text style={styles.credentialNotice}>
-              Obtain your digital credential before the administrator freezes this election. Credentials cannot be added after voting setup is locked.
-            </Text>
           )}
         </Card>
 
@@ -231,12 +226,6 @@ const styles = StyleSheet.create({
   eligibilityCard: {
     backgroundColor: colors.surfaceSubtle,
     borderColor: colors.borderDark,
-  },
-  credentialNotice: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    lineHeight: 18,
   },
   sectionHeader: {
     ...typography.titleSmall,

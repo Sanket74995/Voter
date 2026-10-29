@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -34,40 +34,6 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
 
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [apiReady, setApiReady] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    api.initialize()
-      .then((baseUrl) => {
-        if (active) {
-          setServerUrl(baseUrl);
-          setApiReady(true);
-        }
-      })
-      .catch((err) => {
-        if (active) {
-          setErrorMessage(`Could not load the saved server address: ${err.message}`);
-          setApiReady(true);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const updateServerUrl = async (url) => {
-    try {
-      await api.setBaseUrl(url);
-      setServerUrl(api.baseUrl);
-      setErrorMessage('');
-      return true;
-    } catch (err) {
-      setErrorMessage(err.message || 'Could not save the server address.');
-      return false;
-    }
-  };
 
   const handleLogin = async () => {
     if (!identifier || !password) {
@@ -153,30 +119,33 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
           <Text style={styles.errorIcon}>⚠️</Text>
           <View style={{ flex: 1 }}>
             <Text style={styles.errorBoxText}>{errorMessage}</Text>
-            {(errorMessage.includes('Connection timed out') || errorMessage.includes('Cannot reach')) && (
+            {errorMessage.includes('Connection timed out') && (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
                 <TouchableOpacity
-                  onPress={async () => {
+                  onPress={() => {
                     const usbUrl = 'http://127.0.0.1:5000/api';
-                    if (await updateServerUrl(usbUrl)) {
-                      Alert.alert('USB Mode', 'Run "adb reverse tcp:5000 tcp:5000" on your PC, then tap Sign In.');
-                    }
+                    api.setBaseUrl(usbUrl);
+                    setServerUrl(usbUrl);
+                    setErrorMessage('');
+                    Alert.alert('Switched to USB Mode', 'Server set to http://127.0.0.1:5000/api. Tap Sign In now!');
                   }}
                   style={styles.quickFixButton}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.quickFixButtonText}>USB (adb reverse)</Text>
+                  <Text style={styles.quickFixButtonText}>🔌 Use USB (127.0.0.1)</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={async () => {
-                    if (await updateServerUrl('http://10.0.2.2:5000/api')) {
-                      Alert.alert('Emulator Mode', 'Server set to the Android emulator host address.');
-                    }
+                  onPress={() => {
+                    const wifiUrl = 'http://10.188.154.135:5000/api';
+                    api.setBaseUrl(wifiUrl);
+                    setServerUrl(wifiUrl);
+                    setErrorMessage('');
+                    Alert.alert('Switched to Wi-Fi Mode', 'Server set to http://10.188.154.135:5000/api. Ensure phone is on same Wi-Fi!');
                   }}
                   style={styles.quickFixButton}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.quickFixButtonText}>Android emulator</Text>
+                  <Text style={styles.quickFixButtonText}>📶 Use Wi-Fi</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -247,7 +216,7 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
             <Button
               title="Create Account"
               onPress={handleRegister}
-              loading={loading || !apiReady}
+              loading={loading}
               style={{ marginTop: spacing.sm }}
             />
           </>
@@ -270,7 +239,7 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
             <Button
               title="Sign In Securely"
               onPress={handleLogin}
-              loading={loading || !apiReady}
+              loading={loading}
               style={{ marginTop: spacing.xs }}
             />
           </>
@@ -349,28 +318,25 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
                 ]}
               >
                 <Text style={[styles.presetChipText, serverUrl.includes('127.0.0.1') && styles.presetChipTextActive]}>
-                  🔌 USB (adb reverse)
+                  🔌 USB Cable (127.0.0.1)
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setServerUrl('http://10.0.2.2:5000/api')}
+                onPress={() => setServerUrl('http://10.188.154.135:5000/api')}
                 style={[
                   styles.presetChip,
-                  serverUrl.includes('10.0.2.2') && styles.presetChipActive,
+                  serverUrl.includes('10.188.154') && styles.presetChipActive,
                 ]}
               >
-                <Text style={[styles.presetChipText, serverUrl.includes('10.0.2.2') && styles.presetChipTextActive]}>
-                  🤖 Android emulator
+                <Text style={[styles.presetChipText, serverUrl.includes('10.188.154') && styles.presetChipTextActive]}>
+                  📶 Wi-Fi (10.188.154.135)
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.serverHelpText}>
-              For a phone on Wi-Fi, enter your PC's current local IP. The saved address is reused after restart.
-            </Text>
             <Input
               label="Backend Server URL"
-              placeholder="http://192.168.1.20:5000/api"
+              placeholder="http://127.0.0.1:5000/api"
               value={serverUrl}
               onChangeText={setServerUrl}
             />
@@ -379,10 +345,10 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
                 <Button
                   title="Save & Connect"
                   variant="outline"
-                  onPress={async () => {
-                    const saved = await updateServerUrl(serverUrl);
-                    if (!saved) return;
+                  onPress={() => {
+                    api.setBaseUrl(serverUrl.trim());
                     setShowServerConfig(false);
+                    setErrorMessage('');
                     Alert.alert('Server Updated', `API endpoint set to: ${api.baseUrl}`);
                   }}
                 />
@@ -392,14 +358,10 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
                   title="Test Connection"
                   variant="ghost"
                   onPress={async () => {
-                    const controller = new AbortController();
-                    let timeoutId;
                     try {
-                      await api.setBaseUrl(serverUrl);
-                      setServerUrl(api.baseUrl);
-                      timeoutId = setTimeout(() => controller.abort(), 3500);
+                      api.setBaseUrl(serverUrl.trim());
                       const res = await fetch(`${api.baseUrl.replace(/\/api$/, '')}/health`, {
-                        signal: controller.signal,
+                        signal: AbortSignal.timeout(3500),
                       });
                       if (res.ok) {
                         Alert.alert('✅ Connected!', 'Backend server is reachable and active.');
@@ -409,10 +371,8 @@ export const LoginScreen = ({ onLoginSuccess, onBack }) => {
                     } catch (e) {
                       Alert.alert(
                         '❌ Connection Failed',
-                        `${e.message || 'Could not connect.'} If using Wi-Fi, ensure the phone and PC are on the same network and allow port 5000 through Windows Firewall.`
+                        'Could not connect. If using USB, run "adb reverse tcp:5000 tcp:5000". If Wi-Fi, ensure PC and phone are on same network.'
                       );
-                    } finally {
-                      if (timeoutId) clearTimeout(timeoutId);
                     }
                   }}
                 />
@@ -592,11 +552,6 @@ const styles = StyleSheet.create({
   },
   serverEditForm: {
     marginTop: spacing.sm,
-  },
-  serverHelpText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 8,
   },
   quickFixButton: {
     backgroundColor: '#EFF6FF',

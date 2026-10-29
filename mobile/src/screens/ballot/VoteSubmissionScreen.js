@@ -16,7 +16,6 @@ import {
 
 export const VoteSubmissionScreen = ({
   election,
-  user,
   selectedCandidate,
   onFinishVoting,
 }) => {
@@ -35,7 +34,7 @@ export const VoteSubmissionScreen = ({
       await new Promise((r) => setTimeout(r, 600));
 
       // Retrieve locally saved credential or fetch from proof
-      let voterCred = getVoterCredential(user.voterId, election.electionId);
+      let voterCred = getVoterCredential(election.electionId);
 
       // Step 2: Fetch Merkle Proof from eligibility registry
       setStep(2);
@@ -64,7 +63,7 @@ export const VoteSubmissionScreen = ({
         if (!commitment) {
           commitment = computeCommitment(secretKey, generated.salt);
         }
-        saveVoterCredential(user.voterId, election.electionId, {
+        saveVoterCredential(election.electionId, {
           secretKey,
           salt: generated.salt,
           commitment,
@@ -74,13 +73,9 @@ export const VoteSubmissionScreen = ({
       const nullifier = computeNullifier(secretKey, election.electionId);
       const merkleProof = proofResponse?.data?.proof || [];
 
-      if (!election.encryptionPublicKey) {
-        throw new Error('Election encryption key is unavailable. Please return to the election and try again.');
-      }
-
-      const { encryptedBallot, ballotCommitment } = await encryptBallotOnDevice(
+      const { encryptedBallot, ballotCommitment } = encryptBallotOnDevice(
         selectedCandidate.candidateIndex,
-        election.encryptionPublicKey
+        election.encryptionPublicKey || 'MOCK_PUBLIC_KEY'
       );
 
       // Step 3: Broadcast transaction to blockchain relay
