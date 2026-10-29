@@ -14,6 +14,30 @@ import {
   saveVoterCredential,
 } from '../../crypto/voterCrypto';
 
+const normalizeErrorMessage = (msg) => {
+  if (!msg) return 'An error occurred while broadcasting your vote. Please try again.';
+  const str = String(msg);
+  if (/NullifierAlreadyUsed|0xda1f09e8|already been consumed/i.test(str)) {
+    return 'Your vote has already been submitted and counted for this election. Each eligible voter can cast exactly one ballot.';
+  }
+  if (/insufficient funds|intrinsic transaction cost|overshot/i.test(str)) {
+    return 'The network relayer is currently experiencing high load. Please retry in a few moments.';
+  }
+  if (/ProofVerificationFailed|MerkleRootMismatch|0x8aa536b5/i.test(str)) {
+    return 'Eligibility check failed. You must be an approved eligible voter to participate in this election.';
+  }
+  if (/ElectionNotOpen|0xea71f501|not currently open/i.test(str)) {
+    return 'This election is not currently open for voting.';
+  }
+  if (/Network request failed|Cannot reach|timeout/i.test(str)) {
+    return 'Unable to reach the server. Please check your internet connection.';
+  }
+  if (str.includes('transaction=') || str.includes('info=') || str.includes('code=')) {
+    return 'A temporary network transaction issue occurred. Please tap Try Again.';
+  }
+  return str;
+};
+
 export const VoteSubmissionScreen = ({
   election,
   selectedCandidate,
@@ -98,7 +122,7 @@ export const VoteSubmissionScreen = ({
         throw new Error(response.error || 'Submission failed');
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Error occurred while broadcasting vote.');
+      setErrorMessage(normalizeErrorMessage(err.message));
       setStep(5);
     }
   };

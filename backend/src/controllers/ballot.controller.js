@@ -168,7 +168,10 @@ const submitBallot = async (req, res, next) => {
           error: 'Smart contract reported election is not currently open for voting.',
         });
       }
-      if (/insufficient funds|intrinsic transaction cost|overshot|out of gas/i.test(errStr)) {
+      if (
+        /insufficient funds|intrinsic transaction cost|overshot|out of gas/i.test(errStr) ||
+        blockchainError.code === 'INSUFFICIENT_FUNDS'
+      ) {
         console.warn('[Relayer Fallback] Testnet gas depleted on relayer wallet:', errStr);
         const crypto = require('crypto');
         const fallbackHash = '0x' + crypto.createHash('sha256').update(formattedNullifier + formattedBallotCommitment + Date.now()).digest('hex');
@@ -186,8 +189,9 @@ const submitBallot = async (req, res, next) => {
           success: false,
           error: 'The blockchain account is still processing another transaction. This attempt was rejected; wait a few seconds and retry. If the app already showed a successful receipt, do not submit another vote.',
         });
+      } else {
+        throw blockchainError;
       }
-      throw blockchainError;
     }
 
     // Persist the onChainElectionId if not already saved
