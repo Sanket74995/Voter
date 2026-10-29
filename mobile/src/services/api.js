@@ -1,8 +1,6 @@
+const DEFAULT_API_BASE_URL = 'https://voter-31oa.onrender.com/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-
-const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5000/api';
-const API_BASE_URL_STORAGE_KEY = '@voter/apiBaseUrl';
 
 class ApiClient {
   constructor() {

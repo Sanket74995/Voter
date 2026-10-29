@@ -6,26 +6,47 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log(`[Deployment] Deploying contracts with account: ${deployer.address}`);
 
-  // 1. Deploy ElectionManager
+  // 1. ElectionManager
+  let electionManagerAddress = process.env.ELECTION_MANAGER_ADDRESS || "0x54B0D3FeA52FfD4861B69f314A96FA567de20244";
   const ElectionManagerFactory = await ethers.getContractFactory("ElectionManager");
-  const electionManager = await ElectionManagerFactory.deploy();
-  await electionManager.waitForDeployment();
-  const electionManagerAddress = await electionManager.getAddress();
-  console.log(`[Deployed] ElectionManager: ${electionManagerAddress}`);
+  let electionManager;
+  if (electionManagerAddress) {
+    electionManager = ElectionManagerFactory.attach(electionManagerAddress);
+    console.log(`[Reusing] Deployed ElectionManager at: ${electionManagerAddress}`);
+  } else {
+    electionManager = await ElectionManagerFactory.deploy();
+    await electionManager.waitForDeployment();
+    electionManagerAddress = await electionManager.getAddress();
+    console.log(`[Deployed] ElectionManager: ${electionManagerAddress}`);
+  }
 
-  // 2. Deploy ProofVerifier
+  // 2. ProofVerifier
+  let proofVerifierAddress = process.env.PROOF_VERIFIER_ADDRESS || "0x18FC4B499eF3eE5f99d9cECeaB2349BF31c06DFc";
   const ProofVerifierFactory = await ethers.getContractFactory("ProofVerifier");
-  const proofVerifier = await ProofVerifierFactory.deploy();
-  await proofVerifier.waitForDeployment();
-  const proofVerifierAddress = await proofVerifier.getAddress();
-  console.log(`[Deployed] ProofVerifier:   ${proofVerifierAddress}`);
+  let proofVerifier;
+  if (proofVerifierAddress) {
+    proofVerifier = ProofVerifierFactory.attach(proofVerifierAddress);
+    console.log(`[Reusing] Deployed ProofVerifier at:   ${proofVerifierAddress}`);
+  } else {
+    proofVerifier = await ProofVerifierFactory.deploy();
+    await proofVerifier.waitForDeployment();
+    proofVerifierAddress = await proofVerifier.getAddress();
+    console.log(`[Deployed] ProofVerifier:   ${proofVerifierAddress}`);
+  }
 
-  // 3. Deploy Voting
+  // 3. Voting
+  let votingAddress = process.env.VOTING_CONTRACT_ADDRESS || "0x299757d2151DB040937034f83c901612a3e15d04";
   const VotingFactory = await ethers.getContractFactory("Voting");
-  const voting = await VotingFactory.deploy(electionManagerAddress, proofVerifierAddress);
-  await voting.waitForDeployment();
-  const votingAddress = await voting.getAddress();
-  console.log(`[Deployed] Voting:          ${votingAddress}`);
+  let voting;
+  if (votingAddress) {
+    voting = VotingFactory.attach(votingAddress);
+    console.log(`[Reusing] Deployed Voting at:          ${votingAddress}`);
+  } else {
+    voting = await VotingFactory.deploy(electionManagerAddress, proofVerifierAddress);
+    await voting.waitForDeployment();
+    votingAddress = await voting.getAddress();
+    console.log(`[Deployed] Voting:          ${votingAddress}`);
+  }
 
   // 4. Deploy TallyRegistry
   const TallyRegistryFactory = await ethers.getContractFactory("TallyRegistry");
@@ -65,6 +86,21 @@ async function main() {
     JSON.stringify(deploymentInfo, null, 2)
   );
   console.log(`[Saved] Deployment manifest written to backend/src/blockchain/deployedContracts.json`);
+
+  // Update root .env
+  const envPath = path.resolve(__dirname, "../../.env");
+  if (fs.existsSync(envPath)) {
+    let envContent = fs.readFileSync(envPath, "utf8");
+    envContent = envContent.replace(/ELECTION_MANAGER_ADDRESS=.*/, `ELECTION_MANAGER_ADDRESS=${electionManagerAddress}`);
+    envContent = envContent.replace(/PROOF_VERIFIER_ADDRESS=.*/, `PROOF_VERIFIER_ADDRESS=${proofVerifierAddress}`);
+    envContent = envContent.replace(/VOTING_CONTRACT_ADDRESS=.*/, `VOTING_CONTRACT_ADDRESS=${votingAddress}`);
+    envContent = envContent.replace(/TALLY_REGISTRY_ADDRESS=.*/, `TALLY_REGISTRY_ADDRESS=${tallyRegistryAddress}`);
+    if (!envContent.includes("BLOCKCHAIN_RPC_URL=")) {
+      envContent += "\nBLOCKCHAIN_RPC_URL=https://polygon-amoy-bor-rpc.publicnode.com\n";
+    }
+    fs.writeFileSync(envPath, envContent);
+    console.log(`[Updated] Root .env updated with deployed contract addresses & RPC`);
+  }
 }
 
 main()

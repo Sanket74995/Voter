@@ -26,7 +26,16 @@ if (env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Health check endpoint
+// Root and Health check endpoints
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'UP',
+    message: 'Civic Voting Backend API is running live 24/7 on Render',
+    health: '/health',
+    version: '1.0.0',
+  });
+});
+
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'UP',
