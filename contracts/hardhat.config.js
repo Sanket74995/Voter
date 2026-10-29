@@ -3,7 +3,8 @@ const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 require("dotenv").config();
 
-const accounts = process.env.DEPLOYER_PRIVATE_KEY ? [process.env.DEPLOYER_PRIVATE_KEY] : [];
+const rawKey = process.env.DEPLOYER_PRIVATE_KEY || "";
+const accounts = rawKey ? [(rawKey.startsWith("0x") ? rawKey : "0x" + rawKey)] : [];
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
@@ -12,7 +13,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 200,
+        runs: 1,
       },
     },
   },
@@ -25,7 +26,7 @@ module.exports = {
       chainId: 31337,
     },
     amoy: {
-      url: process.env.AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",
+      url: process.env.AMOY_RPC_URL || "https://polygon-amoy-bor-rpc.publicnode.com",
       accounts,
       chainId: 80002,
     },
