@@ -132,10 +132,10 @@ const issueCredential = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Election not found.' });
     }
 
-    if (election.status === 'CLOSED' || election.status === 'PUBLISHED') {
+    if (election.status !== 'DRAFT') {
       return res.status(400).json({
         success: false,
-        error: 'Cannot issue credentials for a closed or published election.',
+        error: 'Voting credentials can only be issued while the election is in DRAFT. All credentials must be issued before freezing the Merkle root.',
       });
     }
 
@@ -283,6 +283,17 @@ const getCredentialProof = async (req, res, next) => {
 const revokeCredential = async (req, res, next) => {
   try {
     const { electionId, voterId, reason } = req.body;
+
+    const election = await Election.findOne({ electionId });
+    if (!election) {
+      return res.status(404).json({ success: false, error: 'Election not found.' });
+    }
+    if (election.status !== 'DRAFT') {
+      return res.status(400).json({
+        success: false,
+        error: 'Credentials can only be revoked while the election is in DRAFT, before its Merkle root is frozen.',
+      });
+    }
 
     const issuance = await CredentialIssuance.findOne({
       electionId,

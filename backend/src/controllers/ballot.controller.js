@@ -92,8 +92,7 @@ const submitBallot = async (req, res, next) => {
     // Convert onChainElectionId (default to numeric hash if not explicitly set)
     const onChainId = election.onChainElectionId || (Math.abs(hashString(election.electionId)) % 1000000) + 1;
 
-    // Sync effective credential Merkle root from active credentials
-    let effectiveCredentialRoot = election.credentialRoot;
+    // Ensure the live credential set still matches the root locked at freeze time.
     const activeCreds = await CredentialIssuance.find({
       electionId,
       status: 'ACTIVE',
@@ -101,15 +100,17 @@ const submitBallot = async (req, res, next) => {
     if (activeCreds.length > 0) {
       const leaves = activeCreds.map((c) => c.commitment);
       const tree = new CredentialMerkleTree(leaves);
-      effectiveCredentialRoot = tree.getRoot();
-      if (election.credentialRoot !== effectiveCredentialRoot) {
-        election.credentialRoot = effectiveCredentialRoot;
-        await election.save();
+      if (election.credentialRoot !== tree.getRoot()) {
+        return res.status(409).json({
+          success: false,
+          error: 'The eligible voter credentials changed after this election was frozen. This election cannot safely accept votes; create a new election and issue all voter credentials before freezing it.',
+        });
       }
-    } else if (!effectiveCredentialRoot || effectiveCredentialRoot.startsWith('0x11111111')) {
-      effectiveCredentialRoot = formattedLeaf;
-      election.credentialRoot = effectiveCredentialRoot;
-      await election.save();
+    } else {
+      return res.status(409).json({
+        success: false,
+        error: 'This election has no active voter credentials. Create a new election and issue credentials before freezing it.',
+      });
     }
 
     let relayReceipt;
@@ -126,7 +127,7 @@ const submitBallot = async (req, res, next) => {
           startTime: Math.floor(new Date(election.startTime).getTime() / 1000),
           endTime: Math.floor(new Date(election.endTime).getTime() / 1000),
           encryptionPublicKey: election.encryptionPublicKey,
-          credentialRoot: effectiveCredentialRoot,
+          credentialRoot: election.credentialRoot,
         },
       });
     } catch (blockchainError) {
@@ -157,6 +158,15 @@ const submitBallot = async (req, res, next) => {
         return res.status(400).json({
           success: false,
           error: 'Smart contract reported election is not currently open for voting.',
+        });
+      }
+      if (
+        blockchainError.code === 'NONCE_EXPIRED' ||
+        /nonce too low|nonce has already been used/i.test(errStr)
+      ) {
+        return res.status(503).json({
+          success: false,
+          error: 'The blockchain account is still processing another transaction. This attempt was rejected; wait a few seconds and retry. If the app already showed a successful receipt, do not submit another vote.',
         });
       }
       throw blockchainError;

@@ -204,6 +204,45 @@ describe('Backend API & Integration Test Suite', () => {
           commitment,
         });
       expect(dupRes.status).toBe(409);
+
+      const secondVoterSuffix = Date.now();
+      const secondVoterRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          voterId: `SECOND-TEST-${secondVoterSuffix}`,
+          fullName: 'Second Test Voter',
+          email: `secondvoter-${secondVoterSuffix}@test.com`,
+          password: 'VoterPassword123!',
+          role: 'voter',
+        });
+      expect(secondVoterRes.status).toBe(201);
+
+      const secondEligibilityRes = await request(app)
+        .post('/api/eligibility/register')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          electionId: createdElectionId,
+          voterId: secondVoterRes.body.data.user.voterId,
+        });
+      expect(secondEligibilityRes.status).toBe(201);
+
+      const incompleteFreezeRes = await request(app)
+        .post(`/api/elections/${createdElectionId}/freeze`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(incompleteFreezeRes.status).toBe(400);
+      expect(incompleteFreezeRes.body.error).toContain(
+        'eligible voter(s) still need to obtain a voting credential'
+      );
+
+      const secondCommitment = computeCommitment(generateCredentialSecret(), generateCredentialSecret());
+      const secondIssueRes = await request(app)
+        .post('/api/eligibility/issue-credential')
+        .set('Authorization', `Bearer ${secondVoterRes.body.data.token}`)
+        .send({
+          electionId: createdElectionId,
+          commitment: secondCommitment,
+        });
+      expect(secondIssueRes.status).toBe(201);
     });
 
     it('Admin freezes election and opens it for voting', async () => {
@@ -221,6 +260,15 @@ describe('Backend API & Integration Test Suite', () => {
         .set('Authorization', `Bearer ${adminToken}`);
       expect(openRes.status).toBe(200);
       expect(openRes.body.data.election.status).toBe('OPEN');
+
+      const lateCredentialRes = await request(app)
+        .post('/api/eligibility/issue-credential')
+        .set('Authorization', `Bearer ${voterToken}`)
+        .send({
+          electionId: createdElectionId,
+          commitment: computeCommitment(generateCredentialSecret(), generateCredentialSecret()),
+        });
+      expect(lateCredentialRes.status).toBe(400);
     });
 
     it('Voter prepares ballot and receives election parameters', async () => {

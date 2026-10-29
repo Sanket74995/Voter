@@ -2,6 +2,7 @@ const Election = require('../models/Election');
 const Party = require('../models/Party');
 const blockchainService = require('../blockchain/blockchainService');
 const { decryptBallot } = require('../utils/crypto');
+const keyStore = require('../utils/keyStore');
 const { logAudit } = require('../audit/auditLogger');
 const { ethers } = require('ethers');
 
@@ -113,22 +114,77 @@ const tallyAndPublish = async (req, res, next) => {
         'This can happen if the Hardhat node was restarted and on-chain state was lost.');
     }
 
+    // Fetch authorized election private key for tally decryption
+    let electionPrivateKey;
+    try {
+      electionPrivateKey = keyStore.getElectionPrivateKey(id);
+    } catch (keyErr) {
+      await logAudit({
+        action: 'TALLY_ABORTED_KEY_MISSING',
+        performedBy: req.user.voterId,
+        targetType: 'TALLY',
+        targetId: election.electionId,
+        status: 'FAILURE',
+        details: { reason: keyErr.message },
+        req,
+      });
+      return res.status(500).json({
+        success: false,
+        error: `Tally calculation aborted: ${keyErr.message}`,
+      });
+    }
+
     // Initialize vote counts for each candidate
     const candidateVotes = new Array(approvedParties.length).fill(0);
+    const corruptedBallots = [];
 
-    // Decrypt ballots with election private key (or trustee shares)
-    // For demo/academic execution, decrypt valid payloads
+    // Strictly authenticate and decrypt each on-chain ballot
     for (const ballot of onChainBallots) {
       try {
-        const decrypted = decryptBallot(ballot.encryptedBallot, election.encryptionPublicKey);
+        const decrypted = decryptBallot(ballot.encryptedBallot, electionPrivateKey);
         const idx = decrypted.candidateIndex;
-        if (idx >= 0 && idx < candidateVotes.length) {
+        if (typeof idx === 'number' && idx >= 0 && idx < candidateVotes.length) {
           candidateVotes[idx] += 1;
+        } else {
+          corruptedBallots.push({
+            ballotIndex: ballot.index,
+            nullifier: ballot.nullifier,
+            reason: `Invalid candidate index: ${idx}`,
+          });
         }
       } catch (err) {
-        // Fallback for encrypted test formats
-        candidateVotes[0] = (candidateVotes[0] || 0) + 1;
+        corruptedBallots.push({
+          ballotIndex: ballot.index,
+          nullifier: ballot.nullifier,
+          reason: err.message,
+        });
       }
+    }
+
+    // HALT PUBLICATION IF ANY CORRUPTED / UNPROCESSABLE BALLOTS DETECTED
+    if (corruptedBallots.length > 0) {
+      await logAudit({
+        action: 'TALLY_ABORTED_CORRUPTED_BALLOTS',
+        performedBy: req.user.voterId,
+        targetType: 'TALLY',
+        targetId: election.electionId,
+        status: 'FAILURE',
+        details: {
+          corruptedCount: corruptedBallots.length,
+          totalOnChainBallots: onChainBallots.length,
+          corruptedSamples: corruptedBallots.slice(0, 5),
+        },
+        req,
+      });
+
+      return res.status(422).json({
+        success: false,
+        error: `Tally calculation halted: ${corruptedBallots.length} on-chain ballot(s) failed cryptographic decryption or authentication. Fallback allocation is strictly prohibited.`,
+        data: {
+          corruptedCount: corruptedBallots.length,
+          totalBallots: onChainBallots.length,
+        },
+      });
     }
 
     const totalBallots = onChainBallots.length;

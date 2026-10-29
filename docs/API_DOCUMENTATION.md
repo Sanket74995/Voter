@@ -73,10 +73,10 @@ Create an election in `DRAFT` state.
   ```
 
 ### POST `/api/elections/:id/freeze` (Admin Only)
-Freezes election parameters and computes the Merkle commitment root of all eligible voters.
+Freezes election parameters and computes the Merkle commitment root of all eligible voters. Requires at least one eligible voter, and every eligible voter must have an active credential before this endpoint succeeds. Eligibility and credential membership cannot change after freezing.
 
 ### POST `/api/elections/:id/open` (Admin Only)
-Transitions state to `OPEN`.
+Transitions state from `FROZEN` to `OPEN`. An election cannot be opened directly from `DRAFT`.
 
 ### POST `/api/elections/:id/close` (Admin Only)
 Transitions state to `CLOSED` terminating ballot submission.
@@ -99,7 +99,7 @@ Import eligible voter for an election.
 Check voter's eligibility and issuance state for an election.
 
 ### POST `/api/eligibility/issue-credential` (Authenticated Voter)
-Registers voter's public commitment `C = Hash(secret, salt)`.
+Registers voter's public commitment `C = Hash(secret, salt)`. Credentials can only be issued while the election is in `DRAFT`; all voters must obtain credentials before the administrator freezes the election.
 - **Request Body**:
   ```json
   {

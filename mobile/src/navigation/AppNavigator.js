@@ -211,6 +211,7 @@ export const AppNavigator = () => {
         {currentScreen === 'VOTE_SUBMISSION' && selectedElection && selectedCandidate && (
           <VoteSubmissionScreen
             election={selectedElection}
+            user={user}
             selectedCandidate={selectedCandidate}
             onFinishVoting={() => routeHome(user)}
           />

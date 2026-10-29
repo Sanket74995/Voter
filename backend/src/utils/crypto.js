@@ -122,35 +122,55 @@ class CredentialMerkleTree {
 
 /**
  * Ballot Encryption Utilities:
- * Uses AES-256-GCM encrypted payload with an election-specific public key encapsulation,
- * plus a verifiable ballot hash commitment.
+ * ECIES Hybrid Encryption over secp256k1:
+ * 1. Generates ephemeral keypair
+ * 2. Derives shared secret with electionPublicKey via ECDH
+ * 3. Derives AES-256 key via HKDF-SHA256
+ * 4. Encrypts payload with AES-256-GCM (12-byte random IV, 16-byte auth tag)
+ * 5. Returns packaged envelope and verifiable commitment
  */
 const encryptBallot = (candidateIndex, electionPublicKey, blindingFactor = null) => {
-  const nonce = crypto.randomBytes(12);
   const blinding = blindingFactor || crypto.randomBytes(32).toString('hex');
   
-  // Create payload
+  // Format payload
   const payload = JSON.stringify({
     candidateIndex,
     blinding,
     timestamp: Date.now(),
   });
 
-  // Derive key from electionPublicKey (ECDH or shared election key)
-  const key = crypto.createHash('sha256').update(electionPublicKey).digest();
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, nonce);
-  
-  let encrypted = cipher.update(payload, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  const authTag = cipher.getAuthTag().toString('hex');
+  // Ephemeral keypair
+  const ephemeralWallet = ethers.Wallet.createRandom();
+  const ephemeralPublicKey = ephemeralWallet.signingKey.publicKey;
+  const ephemeralPrivateKey = ephemeralWallet.privateKey;
 
-  const encryptedBallotHex = '0x' + Buffer.from(JSON.stringify({
-    iv: nonce.toString('hex'),
-    ciphertext: encrypted,
-    tag: authTag,
-  })).toString('hex');
+  // ECDH Shared Secret
+  const sharedSecretHex = new ethers.SigningKey(ephemeralPrivateKey).computeSharedSecret(electionPublicKey);
+  const sharedSecretBuf = Buffer.from(sharedSecretHex.replace(/^0x/, ''), 'hex');
 
-  // Compute deterministic ballot commitment
+  // HKDF-SHA256 key derivation
+  const salt = Buffer.alloc(0);
+  const info = Buffer.from('voter-ballot-ecies-v1', 'utf8');
+  const aesKey = Buffer.from(crypto.hkdfSync('sha256', sharedSecretBuf, salt, info, 32));
+
+  // AES-256-GCM authenticated encryption
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
+  let ciphertext = cipher.update(payload, 'utf8', 'hex');
+  ciphertext += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+
+  const envelope = {
+    version: 'ecies-secp256k1-aes256gcm-v1',
+    ephemeralPublicKey,
+    iv: iv.toString('hex'),
+    ciphertext,
+    tag,
+  };
+
+  const encryptedBallotHex = '0x' + Buffer.from(JSON.stringify(envelope), 'utf8').toString('hex');
+
+  // Deterministic ballot commitment: Hash(candidateIndex, Hash(blinding))
   const ballotCommitment = ethers.solidityPackedKeccak256(
     ['uint256', 'bytes32'],
     [candidateIndex, '0x' + crypto.createHash('sha256').update(blinding).digest('hex')]
@@ -164,14 +184,42 @@ const encryptBallot = (candidateIndex, electionPublicKey, blindingFactor = null)
 };
 
 /**
- * Decrypt ballot (authorized during tally phase with election private key)
+ * Decrypt ballot with election private key via ECDH + HKDF + AES-256-GCM
  */
 const decryptBallot = (encryptedBallotHex, electionPrivateKey) => {
-  const rawJson = Buffer.from(encryptedBallotHex.replace(/^0x/, ''), 'hex').toString('utf8');
-  const { iv, ciphertext, tag } = JSON.parse(rawJson);
-  
-  const key = crypto.createHash('sha256').update(electionPrivateKey).digest();
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'hex'));
+  if (!encryptedBallotHex || typeof encryptedBallotHex !== 'string') {
+    throw new Error('Invalid encrypted ballot hex string');
+  }
+
+  const cleanHex = encryptedBallotHex.replace(/^0x/, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleanHex)) {
+    throw new Error('Encrypted ballot contains non-hexadecimal characters');
+  }
+
+  const rawJson = Buffer.from(cleanHex, 'hex').toString('utf8');
+  let envelope;
+  try {
+    envelope = JSON.parse(rawJson);
+  } catch (err) {
+    throw new Error('Failed to parse ballot envelope JSON structure: ' + err.message);
+  }
+
+  const { ephemeralPublicKey, iv, ciphertext, tag } = envelope;
+  if (!ephemeralPublicKey || !iv || !ciphertext || !tag) {
+    throw new Error('Ballot envelope missing required cryptographic parameters (ephemeralPublicKey, iv, ciphertext, tag)');
+  }
+
+  // Derive shared secret
+  const sharedSecretHex = new ethers.SigningKey(electionPrivateKey).computeSharedSecret(ephemeralPublicKey);
+  const sharedSecretBuf = Buffer.from(sharedSecretHex.replace(/^0x/, ''), 'hex');
+
+  // HKDF-SHA256 key derivation
+  const salt = Buffer.alloc(0);
+  const info = Buffer.from('voter-ballot-ecies-v1', 'utf8');
+  const aesKey = Buffer.from(crypto.hkdfSync('sha256', sharedSecretBuf, salt, info, 32));
+
+  // AES-256-GCM decryption and authentication
+  const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, Buffer.from(iv, 'hex'));
   decipher.setAuthTag(Buffer.from(tag, 'hex'));
 
   let decrypted = decipher.update(ciphertext, 'hex', 'utf8');

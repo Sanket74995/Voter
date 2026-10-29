@@ -3,6 +3,7 @@ const Party = require('../models/Party');
 const VoterEligibility = require('../models/VoterEligibility');
 const CredentialIssuance = require('../models/CredentialIssuance');
 const { CredentialMerkleTree } = require('../utils/crypto');
+const keyStore = require('../utils/keyStore');
 const { logAudit } = require('../audit/auditLogger');
 const crypto = require('crypto');
 
@@ -32,12 +33,9 @@ const createElection = async (req, res, next) => {
 
     const electionId = 'ELEC-' + Date.now() + '-' + crypto.randomBytes(3).toString('hex').toUpperCase();
 
-    // Generate unique election public encryption key for encrypted ballots
-    const electionKeyPair = crypto.generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
+    // Generate unique election public encryption key using KeyStoreService (ECIES secp256k1)
+    // Private key is stored encrypted in the vault — never in MongoDB.
+    const { electionPublicKey } = keyStore.generateElectionKeyPair(electionId);
 
     const election = await Election.create({
       electionId,
@@ -46,7 +44,7 @@ const createElection = async (req, res, next) => {
       startTime: start,
       endTime: end,
       status: 'DRAFT',
-      encryptionPublicKey: electionKeyPair.publicKey,
+      encryptionPublicKey: electionPublicKey,
     });
 
     await logAudit({
@@ -155,16 +153,37 @@ const freezeElection = async (req, res, next) => {
       });
     }
 
-    // Retrieve all active credential commitments
+    const eligibleVoters = await VoterEligibility.find({
+      electionId: id,
+      eligibilityStatus: 'ELIGIBLE',
+    }).select('voterId');
+
+    if (eligibleVoters.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Add at least one eligible voter and have them obtain a credential before freezing the election.',
+      });
+    }
+
+    // The credential set must be complete before its Merkle root is frozen.
     const activeCredentials = await CredentialIssuance.find({
       electionId: id,
       status: 'ACTIVE',
     });
 
-    const commitmentLeaves = activeCredentials.map((c) => c.commitment);
-    const merkleTree = new CredentialMerkleTree(
-      commitmentLeaves.length > 0 ? commitmentLeaves : ['0x' + '1'.repeat(64)]
+    const credentialVoterIds = new Set(activeCredentials.map((credential) => credential.voterId));
+    const votersWithoutCredentials = eligibleVoters.filter(
+      (voter) => !credentialVoterIds.has(voter.voterId)
     );
+    if (votersWithoutCredentials.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: `${votersWithoutCredentials.length} eligible voter(s) still need to obtain a voting credential before the election can be frozen.`,
+      });
+    }
+
+    const commitmentLeaves = activeCredentials.map((c) => c.commitment);
+    const merkleTree = new CredentialMerkleTree(commitmentLeaves);
     const root = merkleTree.getRoot();
 
     election.credentialRoot = root;
@@ -208,10 +227,10 @@ const openElection = async (req, res, next) => {
       return res.status(404).json({ success: false, error: 'Election not found' });
     }
 
-    if (election.status !== 'FROZEN' && election.status !== 'DRAFT') {
+    if (election.status !== 'FROZEN') {
       return res.status(400).json({
         success: false,
-        error: `Cannot open election from status '${election.status}'.`,
+        error: `Cannot open election from status '${election.status}'. Freeze the election after all eligible voters obtain credentials.`,
       });
     }
 
