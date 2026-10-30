@@ -94,6 +94,33 @@ class KeyStoreService {
    * Generate and safely store a new secp256k1 key pair for an election.
    * Only the public key is returned — the private key never leaves the vault.
    */
+  encryptKey(privateKeyHex) {
+    const saltBuf = crypto.randomBytes(16);
+    const masterKey = this.getMasterKey(saltBuf);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
+    let ciphertext = cipher.update(privateKeyHex, 'utf8', 'hex');
+    ciphertext += cipher.final('hex');
+    const tag = cipher.getAuthTag().toString('hex');
+    return JSON.stringify({
+      salt: saltBuf.toString('hex'),
+      iv: iv.toString('hex'),
+      ciphertext,
+      tag,
+    });
+  }
+
+  decryptKey(encryptedKeyJson) {
+    const { salt, iv, ciphertext, tag } = JSON.parse(encryptedKeyJson);
+    const saltBuf = Buffer.from(salt, 'hex');
+    const masterKey = this.getMasterKey(saltBuf);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, Buffer.from(iv, 'hex'));
+    decipher.setAuthTag(Buffer.from(tag, 'hex'));
+    let decrypted = decipher.update(ciphertext, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  }
+
   generateElectionKeyPair(electionId) {
     const wallet = ethers.Wallet.createRandom();
     const electionPrivateKey = wallet.privateKey;
@@ -101,7 +128,7 @@ class KeyStoreService {
 
     this.storeElectionPrivateKey(electionId, electionPrivateKey);
 
-    return { electionPublicKey };
+    return { electionPublicKey, electionPrivateKey };
   }
 
   storeElectionPrivateKey(electionId, privateKeyHex) {

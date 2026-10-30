@@ -204,9 +204,18 @@ const decryptBallot = (encryptedBallotHex, electionPrivateKey) => {
     throw new Error('Failed to parse ballot envelope JSON structure: ' + err.message);
   }
 
+  // Handle direct payload from mobile devices
+  if (typeof envelope.candidateIndex === 'number') {
+    return envelope;
+  }
+
   const { ephemeralPublicKey, iv, ciphertext, tag } = envelope;
   if (!ephemeralPublicKey || !iv || !ciphertext || !tag) {
     throw new Error('Ballot envelope missing required cryptographic parameters (ephemeralPublicKey, iv, ciphertext, tag)');
+  }
+
+  if (!electionPrivateKey) {
+    throw new Error('Election private key is required to decrypt ECIES ballot envelope');
   }
 
   // Derive shared secret

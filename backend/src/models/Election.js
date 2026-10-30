@@ -46,6 +46,10 @@ const electionSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    encryptedPrivateKey: {
+      type: String,
+      default: null,
+    },
     totalEligibleVoters: {
       type: Number,
       default: 0,

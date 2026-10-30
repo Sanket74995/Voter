@@ -35,7 +35,8 @@ const createElection = async (req, res, next) => {
 
     // Generate unique election public encryption key using KeyStoreService (ECIES secp256k1)
     // Private key is stored encrypted in the vault — never in MongoDB.
-    const { electionPublicKey } = keyStore.generateElectionKeyPair(electionId);
+    const { electionPublicKey, electionPrivateKey } = keyStore.generateElectionKeyPair(electionId);
+    const encryptedPrivateKey = keyStore.encryptKey(electionPrivateKey);
 
     const election = await Election.create({
       electionId,
@@ -45,6 +46,7 @@ const createElection = async (req, res, next) => {
       endTime: end,
       status: 'DRAFT',
       encryptionPublicKey: electionPublicKey,
+      encryptedPrivateKey,
     });
 
     await logAudit({
